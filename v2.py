@@ -12,9 +12,9 @@ from datetime import datetime, timedelta
 API_KEY = st.secrets["GROQ_API_KEY"]
 
 # --- 💰 PAYMENT LINKS ---
-LINK_SINGLE = "https://payment.intasend.com/pay/YOUR_LINK_FOR_50_BOB" 
-LINK_MONTHLY = "https://payment.intasend.com/pay/YOUR_LINK_FOR_1000_BOB"
-PAYPAL_ME_LINK = "https://www.paypal.com/qrcodes/p2pqrc/9UARHMAVPN77Y"
+LINK_SINGLE = st.secrets["LINK_SINGLE"]
+LINK_MONTHLY = st.secrets["LINK_MONTHLY"]
+PAYPAL_ME_LINK = st.secrets["PAYPAL_ME_LINK"]
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="AI Resume Pro", page_icon="💎", layout="wide")
@@ -115,7 +115,7 @@ def show_payment_screen():
     st.divider()
 
     # --- VERIFICATION ---
-    st.subheader("🔓 Verify Payment to Unlock")
+    st.subheader("🔓 Verify Payment to Unlock (Transaction ID/CODE")
     col_v1, col_v2 = st.columns([3, 1])
     with col_v1:
         trans_code = st.text_input("Transaction Code:", placeholder="e.g. RJG829D...", label_visibility="collapsed")
@@ -250,5 +250,4 @@ def create_styled_docx(text, style):
 if st.session_state.access_level == "LOCKED":
     show_payment_screen()
 else:
-
     show_main_app()
