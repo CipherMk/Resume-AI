@@ -7,16 +7,11 @@ import time
 from datetime import datetime, timedelta
 
 # --- ⚠️ CONFIGURATION ---
-try:
-    API_KEY = st.secrets["GROQ_API_KEY"]
-    LINK_SINGLE = st.secrets["LINK_SINGLE"]
-    LINK_MONTHLY = st.secrets["LINK_MONTHLY"]
-    PAYPAL_ME_LINK = st.secrets["PAYPAL_ME_LINK"]
-except:
-    API_KEY = "PASTE_KEY_HERE_IF_LOCAL"
-    LINK_SINGLE = "https://example.com"
-    LINK_MONTHLY = "https://example.com"
-    PAYPAL_ME_LINK = "https://paypal.me"
+API_KEY = st.secrets["GROQ_API_KEY"]
+LINK_SINGLE = st.secrets["LINK_SINGLE"]
+LINK_MONTHLY = st.secrets["LINK_MONTHLY"]
+PAYPAL_ME_LINK = st.secrets["PAYPAL_ME_LINK"]
+
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="AI Resume Pro", page_icon="🌍", layout="wide")
@@ -341,3 +336,4 @@ if st.session_state.access_level == "LOCKED":
     show_payment_screen()
 else:
     show_main_app()
+
