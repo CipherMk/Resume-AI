@@ -223,7 +223,7 @@ def show_payment_screen():
                     st.error("Invalid details.")
 
 # =========================================================
-# ⚙️ MAIN APP LOGIC
+# ⚙️ MAIN APP LOGIC (FIXED INDENTATION)
 # =========================================================
 def show_main_app():
     st.markdown(PROTECTED_CSS, unsafe_allow_html=True)
@@ -270,7 +270,7 @@ def show_main_app():
     with col_style:
         visual_style = st.selectbox("Visual Style", ["Modern Clean", "Classic Professional", "Executive"])
 
-    # --- SIDEBAR ---
+    # --- SIDEBAR (THIS WAS THE ERROR AREA) ---
     with st.sidebar:
         st.info(f"User: {user.get('email')}")
         if is_demo:
@@ -280,4 +280,51 @@ def show_main_app():
                 st.rerun()
         else:
             st.metric("Credits Left", credits)
+            # 👇 THIS INDENTATION WAS WRONG IN YOUR CODE
             if st.button("Logout"):
+                st.session_state.user_data = None
+                st.rerun()
+
+    # --- 2. INPUTS ---
+    if is_demo:
+        st.subheader(f"👁️ Preview: {cv_region}")
+        cache_key = f"{cv_category}_{cv_region}"
+        if cache_key not in st.session_state.demo_cache:
+            st.session_state.demo_cache[cache_key] = generate_ai_content("DEMO", cv_region, "DEMO", "DEMO", "DEMO")
+        st.markdown(f"<div class='protected-view'><div class='watermark'>DEMO</div>{st.session_state.demo_cache[cache_key]}</div>", unsafe_allow_html=True)
+    
+    else:
+        st.header("2. Your Information")
+        c_left, c_right = st.columns(2)
+        with c_left: job_desc = st.text_area("Target Job Description:", height=250)
+        with c_right: resume_text = st.text_area("Your Info (Experience & Education):", height=250)
+
+        # GENERATE BUTTON
+        col_sp, col_btn, col_sp2 = st.columns([1, 2, 1])
+        with col_btn:
+            if st.button("🚀 Generate Optimized CV", type="primary", use_container_width=True):
+                # Check credits from DB fresh
+                fresh_user = login_user(user['email'])
+                current_creds = fresh_user['credits'] if fresh_user else credits
+                
+                if current_creds < 1:
+                    st.error("🚫 Limit Reached. Top up required.")
+                elif not resume_text:
+                    st.warning("Enter info first.")
+                else:
+                    with st.spinner("AI Generating..."):
+                        res = generate_ai_content(cv_category, cv_region, visual_style, resume_text, job_desc)
+                        st.session_state.generated_resume = res
+                        
+                        # Deduct Credit
+                        if fresh_user:
+                            update_credits(user['email'], current_creds - 1)
+                            st.rerun()
+
+        # RESULTS
+        if st.session_state.generated_resume:
+            st.divider()
+            st.header("3. Download")
+            st.text_area("Editor:", st.session_state.generated_resume, height=600)
+            st.download_button("📥 Download .docx", create_styled_docx(st.session_state.generated_resume), "CV.docx", type="primary")
+            
