@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime, timedelta
 
 # --- ⚠️ CONFIGURATION ---
-API_KEY = "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"
+API_KEY = st.secrets["GROQ_API_KEY"]
 
 # --- 💰 PAYMENT LINKS ---
 LINK_SINGLE = "https://payment.intasend.com/pay/YOUR_LINK_FOR_50_BOB" 
@@ -250,4 +250,5 @@ def create_styled_docx(text, style):
 if st.session_state.access_level == "LOCKED":
     show_payment_screen()
 else:
+
     show_main_app()
