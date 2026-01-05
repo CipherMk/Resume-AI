@@ -135,26 +135,46 @@ def verify_code_simulated(code):
 
 def show_auth_screen():
     st.markdown("<h1 style='text-align: center;'>🌍 Global AI Resume Builder</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center;'>Log in or choose a plan to start.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center;'>Enter your email to Login or Register automatically.</p>", unsafe_allow_html=True)
     
     if not DB_CONNECTED:
         st.warning("⚠️ Database not connected. Features will be limited. Check Secrets.")
 
-    # --- LOGIN SECTION ---
-    with st.expander("🔑 Already have an account? Login here", expanded=True):
-        col_em, col_btn = st.columns([3, 1])
-        login_email = col_em.text_input("Enter your Email to Login:", key="login_field")
-        if col_btn.button("Login / Refresh", use_container_width=True):
-            user = login_user(login_email)
-            if user:
-                st.session_state.user_data = user
-                st.success(f"Welcome back! You have {user.get('credits', 0)} credits left.")
-                time.sleep(1)
-                st.rerun()
-            else:
-                st.error("User not found or DB disconnected.")
+    # --- 🆕 COMBINED LOGIN / REGISTER SECTION ---
+    with st.container():
+        col_spacer, col_main, col_spacer2 = st.columns([1, 2, 1])
+        with col_main:
+            with st.form("auth_form"):
+                st.subheader("🔑 Access Portal")
+                login_email = st.text_input("Email Address:", placeholder="name@example.com").strip().lower()
+                submitted = st.form_submit_button("🚀 Enter App", type="primary", use_container_width=True)
+                
+                if submitted:
+                    if "@" not in login_email:
+                        st.error("Please enter a valid email address.")
+                    else:
+                        # 1. Try to find existing user
+                        user = login_user(login_email)
+                        
+                        # 2. If User NOT found -> Auto-Register them (First Login)
+                        if not user:
+                            # Register as "FREE" user with 0 credits, valid for 365 days
+                            success = register_user(login_email, "FREE_TIER", 0, 365)
+                            if success:
+                                st.toast(f"🆕 Account created for {login_email}!")
+                                user = login_user(login_email) # Fetch the new user details
+                            else:
+                                st.error("Could not register user. Database Error.")
+
+                        # 3. Log them in (if user exists now)
+                        if user:
+                            st.session_state.user_data = user
+                            st.success(f"✅ Welcome! Credits: {user.get('credits', 0)}")
+                            time.sleep(1)
+                            st.rerun()
 
     st.divider()
+    st.markdown("<h3 style='text-align: center;'>💎 Purchase Credits</h3>", unsafe_allow_html=True)
 
     # --- PRICING CARDS ---
     c1, c2, c3 = st.columns(3)
@@ -176,7 +196,7 @@ def show_auth_screen():
             st.markdown(f"[**PayPal Link**]({PAYPAL_ME_LINK}/0.50USD)")
             
             st.divider()
-            email_pay = st.text_input("Your Email:", placeholder="For account creation")
+            email_pay = st.text_input("Your Email (for credits):", value=login_email if 'login_email' in locals() else "")
             code_pay = st.text_input("Transaction Code:")
             
             if st.button("Verify & Activate Single Pass"):
@@ -195,7 +215,7 @@ def show_auth_screen():
         st.success("🏆 **Monthly Pro**\n\n**3 DAYS FREE TRIAL**\nThen KES 1000/mo.")
         with st.popover("Start Free Trial"):
             st.write("**Register for Trial**")
-            t_email = st.text_input("Email Address")
+            t_email = st.text_input("Email Address", value=login_email if 'login_email' in locals() else "")
             t_phone = st.text_input("Phone (for future billing)")
             t_method = st.radio("Future Payment:", ["M-Pesa", "Card", "PayPal"])
             
@@ -209,7 +229,6 @@ def show_auth_screen():
                         st.rerun()
                 else:
                     st.error("Invalid Details.")
-
 # =========================================================
 # ⚙️ MAIN APPLICATION
 # =========================================================
@@ -380,3 +399,4 @@ if st.session_state.user_data is None:
     show_auth_screen()
 else:
     show_main_app()
+
