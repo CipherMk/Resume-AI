@@ -2,22 +2,24 @@ import streamlit as st
 from groq import Groq
 from docx import Document
 from docx.shared import Pt
-from docx.enum.text import WD_ALIGN_PARAGRAPH
 import io
 import time
-import uuid
 from datetime import datetime, timedelta
 
 # --- ⚠️ CONFIGURATION ---
-API_KEY = st.secrets["GROQ_API_KEY"]
-
-# --- 💰 PAYMENT LINKS ---
-LINK_SINGLE = st.secrets["LINK_SINGLE"]
-LINK_MONTHLY = st.secrets["LINK_MONTHLY"]
-PAYPAL_ME_LINK = st.secrets["PAYPAL_ME_LINK"]
+try:
+    API_KEY = st.secrets["GROQ_API_KEY"]
+    LINK_SINGLE = st.secrets["LINK_SINGLE"]
+    LINK_MONTHLY = st.secrets["LINK_MONTHLY"]
+    PAYPAL_ME_LINK = st.secrets["PAYPAL_ME_LINK"]
+except:
+    API_KEY = "PASTE_KEY_HERE_IF_LOCAL"
+    LINK_SINGLE = "https://example.com"
+    LINK_MONTHLY = "https://example.com"
+    PAYPAL_ME_LINK = "https://paypal.me"
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="AI Resume Pro", page_icon="💎", layout="wide")
+st.set_page_config(page_title="AI Resume Pro", page_icon="🌍", layout="wide")
 
 # --- CSS ---
 PROTECTED_CSS = """
@@ -33,17 +35,26 @@ h1 { text-align: center; }
     transform: translate(-50%, -50%) rotate(-30deg);
     font-size: 80px; color: rgba(0,0,0,0.05); font-weight: 900;
 }
+.trial-banner {
+    background-color: #d4edda; color: #155724; padding: 10px;
+    border-radius: 5px; text-align: center; margin-bottom: 20px; border: 1px solid #c3e6cb;
+}
+/* Center the inputs */
+.stTextArea label {
+    font-weight: bold;
+    font-size: 1.1rem;
+}
 </style>
 """
 
 # --- SESSION STATE ---
-if 'access_level' not in st.session_state: st.session_state.access_level = "LOCKED" 
+if 'access_level' not in st.session_state: st.session_state.access_level = "LOCKED"
 if 'expiry_time' not in st.session_state: st.session_state.expiry_time = None
 if 'generated_resume' not in st.session_state: st.session_state.generated_resume = None
 if 'demo_cache' not in st.session_state: st.session_state.demo_cache = {}
-
-# 🚨 NEW: Track Usage Limit
 if 'generation_count' not in st.session_state: st.session_state.generation_count = 0
+if 'selected_plan' not in st.session_state: st.session_state.selected_plan = None
+if 'user_email' not in st.session_state: st.session_state.user_email = None
 
 # =========================================================
 # 🕒 ACCESS CHECKER
@@ -53,29 +64,32 @@ def check_access():
     if st.session_state.expiry_time and datetime.now() > st.session_state.expiry_time:
         st.session_state.access_level = "LOCKED"
         st.session_state.expiry_time = None
-        st.warning("⏳ Session expired. Please renew.")
+        st.warning("⏳ Session or Trial expired. Please renew/pay.")
         st.rerun()
 check_access()
 
 # =========================================================
-# 💰 VERIFICATION (SIMULATED)
+# 💰 LOGIC HELPERS
 # =========================================================
 def verify_transaction(code):
-    """
-    Simulated verification. In real app, check against DB/API.
-    """
-    code = code.strip().upper()
-    if len(code) >= 10: return True
-    return False
+    return len(code.strip()) >= 8
+
+def start_free_trial(email, payment_method):
+    st.session_state.user_email = email
+    st.session_state.access_level = "TRIAL_MONTHLY"
+    st.session_state.expiry_time = datetime.now() + timedelta(days=3)
+    st.balloons()
+    st.success(f"✅ Trial Activated for {email}. You have 3 Days Free!")
+    time.sleep(2)
+    st.rerun()
 
 # =========================================================
-# 🔒 PAYMENT SCREEN (FIXED)
+# 🔒 PAYMENT SCREEN
 # =========================================================
 def show_payment_screen():
-    st.markdown("<h1 style='text-align: center;'>💎 Unlock AI Resume Pro</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center;'>Choose a plan to start generating professional CVs.</p>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center;'>🌍 Global AI Resume Builder</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center;'>Select a plan to generate international standard CVs.</p>", unsafe_allow_html=True)
     
-    # --- PRICING ---
     c1, c2, c3 = st.columns(3)
     with c1:
         st.info("👶 **Free Demo**\n\nNo Download.\nView Examples Only.")
@@ -84,85 +98,106 @@ def show_payment_screen():
             st.session_state.expiry_time = datetime.now() + timedelta(minutes=10)
             st.rerun()
     with c2:
-        st.warning("⚡ **Single CV Pass**\n\n**KES 50 / $0.50**\n1 Generation Limit.")
+        st.warning("⚡ **Single CV Pass**\n\n**KES 50 / $0.50**\n3 Generation Limit.")
+        if st.button("Select Single Pass", key="btn_single", use_container_width=True):
+            st.session_state.selected_plan = "Single"
     with c3:
-        # FIXED: Replaced st.primary (which doesn't exist) with st.success
-        st.success("🏆 **Monthly Pro**\n\n**KES 1000 / $8.00**\nUnlimited Access.")
+        st.success("🏆 **Monthly Pro**\n\n**3 DAYS FREE TRIAL**\nThen KES 1000/mo.")
+        if st.button("Start Free Trial", key="btn_monthly", use_container_width=True):
+            st.session_state.selected_plan = "Monthly"
 
     st.divider()
 
-    # --- PAYMENT TABS ---
-    st.subheader("💳 Choose Payment Method")
-    pay_tab1, pay_tab2 = st.tabs(["🇰🇪 M-Pesa / Visa (Instant)", "🌎 PayPal"])
-
-    with pay_tab1:
-        st.markdown("### Pay securely via IntaSend")
-        plan = st.radio("Select Plan:", ["Single CV Pass (KES 50)", "Monthly Pro (KES 1000)"], horizontal=True)
-        pay_url = LINK_MONTHLY if "1000" in plan else LINK_SINGLE
+    if st.session_state.selected_plan == "Single":
+        st.subheader("💳 One-Time Payment: Single Pass")
+        pay_tab1, pay_tab2 = st.tabs(["🇰🇪 M-Pesa", "🌎 PayPal"])
+        with pay_tab1:
+            st.write("Pay **KES 50** to:")
+            st.markdown(f"[**Click to Pay via IntaSend**]({LINK_SINGLE})")
+        with pay_tab2:
+            st.write("Pay **$0.50** to:")
+            st.markdown(f"[**Click to Pay via PayPal**]({PAYPAL_ME_LINK}/0.50USD)")
         
-        st.markdown(f"""
-        <a href="{pay_url}" target="_blank">
-            <button style="background-color:#00C853; color:white; border:none; padding:10px 20px; border-radius:5px; font-size:16px; cursor:pointer; width:100%;">
-                👉 Click Here to Pay {plan}
-            </button>
-        </a>
-        """, unsafe_allow_html=True)
-
-    with pay_tab2:
-        st.markdown(f"[**Click to Pay via PayPal**]({PAYPAL_ME_LINK})")
-        st.write("Send **$0.50** (Single) or **$8.00** (Monthly).")
-
-    st.divider()
-
-    # --- VERIFICATION ---
-    st.subheader("🔓 Verify Payment to Unlock (Transaction ID/CODE")
-    col_v1, col_v2 = st.columns([3, 1])
-    with col_v1:
-        trans_code = st.text_input("Transaction Code:", placeholder="e.g. RJG829D...", label_visibility="collapsed")
-    with col_v2:
-        # We need to know WHICH plan they paid for to verify correctly
-        plan_verified = st.selectbox("I Paid For:", ["Single Pass (50 KES)", "Monthly Pro (1000 KES)"], label_visibility="collapsed")
-        
-        if st.button("Verify & Unlock", type="primary", use_container_width=True):
+        st.divider()
+        c_code, c_btn = st.columns([3, 1])
+        trans_code = c_code.text_input("Transaction Code:", placeholder="e.g. RJG829...", label_visibility="collapsed")
+        if c_btn.button("Unlock Single Pass", type="primary"):
             if verify_transaction(trans_code):
-                st.balloons()
-                
-                # 🚨 ASSIGN SPECIFIC ACCESS LEVEL
-                if "Single" in plan_verified:
-                    st.session_state.access_level = "PAID_SINGLE"
-                    st.session_state.expiry_time = datetime.now() + timedelta(hours=2)
-                    st.session_state.generation_count = 0 # Reset count
-                else:
-                    st.session_state.access_level = "PAID_MONTHLY"
-                    st.session_state.expiry_time = datetime.now() + timedelta(days=30)
-                
-                st.success("✅ Payment Verified!")
-                time.sleep(1.5)
+                st.session_state.access_level = "PAID_SINGLE"
+                st.session_state.expiry_time = datetime.now() + timedelta(hours=4)
+                st.session_state.generation_count = 0 
                 st.rerun()
             else:
-                st.error("❌ Invalid Code.")
+                st.error("Invalid Code")
+
+    elif st.session_state.selected_plan == "Monthly":
+        st.subheader("📝 Start Your 3-Day Free Trial")
+        st.info("Billing of **KES 1000** starts automatically after 3 days.")
+        with st.form("trial_form"):
+            col_email, col_phone = st.columns(2)
+            email = col_email.text_input("Email Address", placeholder="name@example.com")
+            phone = col_phone.text_input("Phone Number", placeholder="07...")
+            pay_method = st.radio("Select Future Payment Method", ["M-Pesa (Auto-Debit)", "Visa / MasterCard", "PayPal"], horizontal=True)
+            if "Visa" in pay_method:
+                c_card, c_cvv = st.columns([3, 1])
+                c_card.text_input("Card Number", placeholder="0000 0000 0000 0000")
+                c_cvv.text_input("CVV", placeholder="123")
+            st.markdown("---")
+            if st.form_submit_button("✅ Confirm & Start Free Trial", type="primary"):
+                if "@" in email and len(phone) > 5:
+                    start_free_trial(email, pay_method)
+                else:
+                    st.error("Invalid details.")
 
 # =========================================================
-# ⚙️ APP LOGIC (RESTRICTED)
+# ⚙️ APP LOGIC
 # =========================================================
 def show_main_app():
     st.markdown(PROTECTED_CSS, unsafe_allow_html=True)
+    
+    if st.session_state.access_level == "TRIAL_MONTHLY":
+        remaining_time = st.session_state.expiry_time - datetime.now()
+        st.markdown(f"<div class='trial-banner'>💎 <b>TRIAL ACTIVE:</b> {remaining_time.days} days remaining before billing.</div>", unsafe_allow_html=True)
+
     is_demo = st.session_state.access_level == "DEMO"
     access_type = st.session_state.access_level
     
     st.title("🚀 AI Resume Builder")
     
-    # Selectors
-    c1, c2, c3 = st.columns([1, 2, 1]) 
-    with c2:
-        st.write("**Professional Category**")
-        cv_category = st.selectbox("Cat", ["Standard (Corporate)", "NGO / Development", "Service (Driver/Tech)", "Entry-Level", "Executive", "Technical"], label_visibility="collapsed")
+    # --- 🌍 TOP BAR CONFIGURATION ---
+    st.subheader("1. Setup")
+    col_cat, col_region, col_style = st.columns(3)
     
-    st.write("<p style='text-align: center;'><b>Visual Style</b></p>", unsafe_allow_html=True)
-    visual_style = st.radio("Style", ["Classic", "Modern", "Functional"], horizontal=True, label_visibility="collapsed")
+    with col_cat:
+        cv_category = st.selectbox("Role / Industry", [
+            "Corporate / Administration", 
+            "NGO / United Nations / Development", 
+            "Tech / Software / IT",
+            "Medical / Healthcare",
+            "Engineering / Construction",
+            "Sales / Marketing",
+            "Academic / Education",
+            "Service / Hospitality",
+            "Executive / C-Suite",
+            "Entry-Level / Internship"
+        ])
+
+    with col_region:
+        cv_region = st.selectbox("Region / Format Standard", [
+            "🇰🇪 Kenya / UK / Commonwealth (Standard CV)",
+            "🇺🇸 USA / North America (Resume - Concise)",
+            "🇪🇺 Europe (Europass Standard)",
+            "🇨🇦 Canada (Functional/Hybrid)",
+            "🇦🇪 Middle East / Gulf (Detailed)",
+            "🌏 International / Remote (Modern)"
+        ])
+
+    with col_style:
+        visual_style = st.selectbox("Visual Template", ["Modern Clean", "Classic Professional", "Executive Minimalist", "Creative (Bold)"])
+
     st.divider()
 
-    # Sidebar Inputs
+    # --- SIDEBAR (STATUS ONLY) ---
     with st.sidebar:
         if is_demo:
             st.warning("👀 DEMO MODE")
@@ -170,62 +205,84 @@ def show_main_app():
                 st.session_state.access_level = "LOCKED"
                 st.rerun()
         else:
-            # SHOW USER THEIR PLAN STATUS
-            if access_type == "PAID_MONTHLY":
+            st.info(f"User: {st.session_state.user_email if st.session_state.user_email else 'Guest'}")
+            if "MONTHLY" in access_type:
                 st.success(f"💎 PRO: UNLIMITED")
             elif access_type == "PAID_SINGLE":
-                remaining = 1 - st.session_state.generation_count
+                remaining = 3 - st.session_state.generation_count
                 if remaining > 0:
-                    st.warning(f"⚡ SINGLE PASS: {remaining} Left")
+                    st.warning(f"⚡ PASS: {remaining}/3 Left")
                 else:
-                    st.error(f"⚡ SINGLE PASS: EXHAUSTED")
-        
-        st.header("Details")
-        job_desc = st.text_area("Target Job:", disabled=is_demo, height=150)
-        resume_text = st.text_area("Your Info:", disabled=is_demo, height=200)
+                    st.error(f"⚡ PASS EXHAUSTED")
+        st.markdown("---")
+        st.caption("AI Resume Pro v2.0")
 
-    # Content Area
+    # --- MAIN CONTENT AREA ---
+    
     if is_demo:
-        st.subheader(f"👁️ Preview: {cv_category}")
-        cache_key = f"{cv_category}_{visual_style}"
+        # Demo View
+        st.subheader(f"👁️ Preview: {cv_region}")
+        cache_key = f"{cv_category}_{cv_region}_{visual_style}"
         if cache_key not in st.session_state.demo_cache:
-            with st.spinner("AI generating example..."):
-                st.session_state.demo_cache[cache_key] = generate_demo_persona(cv_category, visual_style)
-        
+            with st.spinner("Generating sample..."):
+                st.session_state.demo_cache[cache_key] = generate_demo_persona(cv_category, cv_region)
         st.markdown(f"<div class='protected-view'><div class='watermark'>DEMO</div>{st.session_state.demo_cache[cache_key]}</div>", unsafe_allow_html=True)
     
     else:
-        # === PAID AREA WITH RESTRICTIONS ===
+        # === ✅ USER INPUTS (CENTERED) ===
+        st.header("2. Your Information")
+        
+        # Using columns to organize inputs cleanly
+        c_left, c_right = st.columns(2)
+        
+        with c_left:
+             st.info("💡 **Tip:** Paste the job advert here so the AI can match your skills to the requirements.")
+             job_desc = st.text_area("Target Job Description (Optional):", height=250, placeholder="Paste the job advert here...")
+        
+        with c_right:
+             st.info("💡 **Tip:** Paste your old CV text or type a summary of your experience.")
+             resume_text = st.text_area("Your Info (Work History, Education, Skills):", height=250, placeholder="Name: John Doe\nEducation: ...\nExperience: ...")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # === GENERATE ACTION ===
         limit_reached = False
-        if access_type == "PAID_SINGLE" and st.session_state.generation_count >= 1:
+        if access_type == "PAID_SINGLE" and st.session_state.generation_count >= 3:
             limit_reached = True
 
         if limit_reached:
-            st.error("🚫 You have used your 1 generation for this Single Pass.")
-            st.info("To generate more CVs (e.g. for different jobs), upgrade to Monthly Pro.")
-            if st.button("Upgrade to Pro"):
+            st.error("🚫 Limit Reached.")
+            if st.button("Upgrade to Monthly"):
                 st.session_state.access_level = "LOCKED"
                 st.rerun()
         else:
-            if st.button("🚀 Generate My Resume", type="primary"):
-                if not resume_text: 
-                    st.warning("Enter info first.")
-                else:
-                    with st.spinner("Thinking..."):
-                        res = generate_ai_content(cv_category, visual_style, resume_text, job_desc)
-                        st.session_state.generated_resume = res
-                        
-                        # 🚨 INCREMENT COUNTER
-                        if access_type == "PAID_SINGLE":
-                            st.session_state.generation_count += 1
-                            st.rerun() # Rerun to update the UI immediately
+            # Centered Generate Button
+            col_spacer, col_btn, col_spacer2 = st.columns([1, 2, 1])
+            with col_btn:
+                if st.button("🚀 Generate Optimized CV Now", type="primary", use_container_width=True):
+                    if not resume_text: 
+                        st.warning("Please enter your information above first.")
+                    else:
+                        with st.spinner(f"Applying {cv_region} standards..."):
+                            res = generate_ai_content(cv_category, cv_region, visual_style, resume_text, job_desc)
+                            st.session_state.generated_resume = res
+                            
+                            if access_type == "PAID_SINGLE":
+                                st.session_state.generation_count += 1
+                                st.rerun() 
         
+        # === RESULTS SECTION ===
         if st.session_state.generated_resume:
-            st.text_area("Editor", st.session_state.generated_resume, height=600)
-            st.download_button("Download .docx", create_styled_docx(st.session_state.generated_resume, visual_style), "Resume.docx")
+            st.divider()
+            st.header("3. Review & Download")
+            st.text_area("Editor (Make final tweaks here):", st.session_state.generated_resume, height=600)
+            
+            d_col1, d_col2, d_col3 = st.columns([1,2,1])
+            with d_col2:
+                st.download_button(f"📥 Download {cv_region} CV (.docx)", create_styled_docx(st.session_state.generated_resume), "Professional_CV.docx", type="primary", use_container_width=True)
 
 # =========================================================
-# 🧠 AI HELPERS
+# 🧠 AI ENGINE
 # =========================================================
 def get_groq_response(prompt):
     if not API_KEY or "PASTE" in API_KEY: return "Error: API Key Missing"
@@ -234,15 +291,48 @@ def get_groq_response(prompt):
         return client.chat.completions.create(messages=[{"role":"user","content":prompt}],model="llama-3.3-70b-versatile").choices[0].message.content
     except Exception as e: return str(e)
 
-def generate_demo_persona(category, style):
-    return get_groq_response(f"Generate fictional resume for {category} in {style} style.")
+def generate_demo_persona(category, region):
+    return get_groq_response(f"Generate a fictional, professional resume for a {category} role. strictly following the {region} format standard.")
 
-def generate_ai_content(cat, style, res, job):
-    return get_groq_response(f"Write resume. Role: {cat}. Style: {style}. Info: {res}. Job: {job}")
+def generate_ai_content(cat, region, style, res, job):
+    prompt = f"""
+    Act as an expert Global Resume Writer. Write a CV for a '{cat}' role.
+    
+    TARGET REGION/STANDARD: {region}
+    VISUAL STYLE: {style}
+    
+    CRITICAL REGIONAL RULES:
+    - If USA: Use 'Resume' format. Maximum 1-2 pages. NO personal details (age, religion, marital status, photo reference). Use American English. Focus on achievements.
+    - If Kenya/UK: Use 'CV' format. British English. Can include referees.
+    - If Europe: Follow 'Europass' logic. Include key competencies clearly.
+    - If Middle East: You may include personal details if standard for the region.
+    
+    USER INFO:
+    {res}
+    
+    TARGET JOB DESCRIPTION (Optimize for these keywords):
+    {job}
+    
+    OUTPUT FORMAT:
+    Return ONLY the text content of the resume, formatted clearly with distinct sections. Do not include chatty conversational text.
+    """
+    return get_groq_response(prompt)
 
-def create_styled_docx(text, style):
+def create_styled_docx(text):
     doc = Document()
-    for line in text.split('\n'): doc.add_paragraph(line)
+    style = doc.styles['Normal']
+    font = style.font
+    font.name = 'Calibri'
+    font.size = Pt(11)
+    
+    for line in text.split('\n'):
+        if line.isupper() and len(line) < 50:
+            doc.add_heading(line, level=1)
+        else:
+            p = doc.add_paragraph(line)
+            if line.strip().startswith(("-", "*", "•")):
+                p.style = 'List Bullet'
+                
     buffer = io.BytesIO(); doc.save(buffer); buffer.seek(0)
     return buffer
 
