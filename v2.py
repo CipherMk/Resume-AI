@@ -12,7 +12,6 @@ import dateutil.parser
 st.set_page_config(page_title="AI Resume Pro", page_icon="🌍", layout="wide")
 
 # --- ⚠️ ROBUST CONFIGURATION ---
-# 1. Define Defaults (Prevents NameError if secrets are missing)
 GROQ_API_KEY = ""
 SUPA_URL = ""
 SUPA_KEY = ""
@@ -22,25 +21,25 @@ PAYPAL_ME_LINK = "https://paypal.me/yourname"
 DB_CONNECTED = False
 supabase = None
 
-# 2. Try to Load Real Secrets
 try:
-    # Load Links (Support both flat and nested structures)
+    # 1. Load Secrets safely
     if "LINK_SINGLE" in st.secrets: LINK_SINGLE = st.secrets["LINK_SINGLE"]
     if "LINK_MONTHLY" in st.secrets: LINK_MONTHLY = st.secrets["LINK_MONTHLY"]
     if "PAYPAL_ME_LINK" in st.secrets: PAYPAL_ME_LINK = st.secrets["PAYPAL_ME_LINK"]
 
-    # Load Groq
     if "groq" in st.secrets:
         GROQ_API_KEY = st.secrets["groq"]["api_key"]
     elif "GROQ_API_KEY" in st.secrets:
         GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 
-    # Load Supabase
     if "supabase" in st.secrets:
-        SUPA_URL = st.secrets["supabase"]["url"]
-        SUPA_KEY = st.secrets["supabase"]["key"]
+        SUPA_URL = st.secrets["supabase"]["url"].strip()
+        SUPA_KEY = st.secrets["supabase"]["key"].strip()
+        # Auto-fix URL
+        if not SUPA_URL.startswith("http"):
+            SUPA_URL = f"https://{SUPA_URL}"
         
-    # Attempt DB Connection
+    # 2. Connect to DB
     if SUPA_URL and SUPA_KEY:
         supabase: Client = create_client(SUPA_URL, SUPA_KEY)
         DB_CONNECTED = True
@@ -48,7 +47,7 @@ try:
         st.warning("⚠️ Database secrets missing. App running in offline mode.")
 
 except Exception as e:
-    st.error(f"⚠️ Configuration Error: {e}")
+    st.error(f"⚠️ Config Error: {e}")
 
 # --- CSS ---
 PROTECTED_CSS = """
@@ -72,7 +71,7 @@ h1 { text-align: center; }
 </style>
 """
 
-# --- SESSION STATE INITIALIZATION ---
+# --- SESSION STATE ---
 if 'user_data' not in st.session_state: st.session_state.user_data = None
 if 'generated_resume' not in st.session_state: st.session_state.generated_resume = None
 if 'demo_cache' not in st.session_state: st.session_state.demo_cache = {}
@@ -84,7 +83,6 @@ if 'demo_cache' not in st.session_state: st.session_state.demo_cache = {}
 def login_user(email):
     """Fetch user details from Supabase"""
     if not DB_CONNECTED: 
-        # Fallback for when DB is missing (allows testing)
         if email == "test@test.com": return {"email": "test", "credits": 3, "plan_type": "SINGLE"}
         return None
     try:
@@ -97,7 +95,10 @@ def login_user(email):
         return None
 
 def register_user(email, plan_type, credits, days_valid):
-    """Create or Update a user in Supabase"""
+    """
+    UPSERT: Creates new user OR updates existing user.
+    This handles registration automatically.
+    """
     if not DB_CONNECTED: return False
     
     expiry = datetime.now() + timedelta(days=days_valid)
@@ -110,14 +111,14 @@ def register_user(email, plan_type, credits, days_valid):
     }
     
     try:
+        # .upsert() ensures we register new users OR update existing ones
         supabase.table("users").upsert(data).execute()
         return True
     except Exception as e:
-        st.error(f"DB Error: {e}")
+        st.error(f"DB Registration Error: {e}")
         return False
 
 def deduct_credit(email, current_credits):
-    """Reduce credit count by 1"""
     if not DB_CONNECTED: return
     try:
         new_credits = max(0, current_credits - 1)
@@ -127,9 +128,8 @@ def deduct_credit(email, current_credits):
         st.error(f"Credit Update Failed: {e}")
 
 # =========================================================
-# 🔒 ACCESS & PAYMENT LOGIC
+# 🔒 AUTH SCREEN (LOGIN & REGISTER)
 # =========================================================
-
 def verify_code_simulated(code):
     return len(code.strip()) >= 8
 
@@ -138,9 +138,9 @@ def show_auth_screen():
     st.markdown("<p style='text-align: center;'>Enter your email to Login or Register automatically.</p>", unsafe_allow_html=True)
     
     if not DB_CONNECTED:
-        st.warning("⚠️ Database not connected. Features will be limited. Check Secrets.")
+        st.warning("⚠️ Database not connected. Features will be limited.")
 
-    # --- 🆕 COMBINED LOGIN / REGISTER SECTION ---
+    # --- 1. MAIN LOGIN / AUTO-REGISTER ---
     with st.container():
         col_spacer, col_main, col_spacer2 = st.columns([1, 2, 1])
         with col_main:
@@ -151,22 +151,16 @@ def show_auth_screen():
                 
                 if submitted:
                     if "@" not in login_email:
-                        st.error("Please enter a valid email address.")
+                        st.error("Please enter a valid email.")
                     else:
-                        # 1. Try to find existing user
                         user = login_user(login_email)
                         
-                        # 2. If User NOT found -> Auto-Register them (First Login)
+                        # IF NEW USER -> AUTO REGISTER AS FREE TIER
                         if not user:
-                            # Register as "FREE" user with 0 credits, valid for 365 days
-                            success = register_user(login_email, "FREE_TIER", 0, 365)
-                            if success:
-                                st.toast(f"🆕 Account created for {login_email}!")
-                                user = login_user(login_email) # Fetch the new user details
-                            else:
-                                st.error("Could not register user. Database Error.")
+                            register_user(login_email, "FREE_TIER", 0, 365)
+                            user = login_user(login_email)
+                            st.toast(f"🆕 Account created for {login_email}!")
 
-                        # 3. Log them in (if user exists now)
                         if user:
                             st.session_state.user_data = user
                             st.success(f"✅ Welcome! Credits: {user.get('credits', 0)}")
@@ -176,67 +170,74 @@ def show_auth_screen():
     st.divider()
     st.markdown("<h3 style='text-align: center;'>💎 Purchase Credits</h3>", unsafe_allow_html=True)
 
-    # --- PRICING CARDS ---
+    # --- 2. PRICING PLANS ---
     c1, c2, c3 = st.columns(3)
     
-    # 1. DEMO
+    # DEMO
     with c1:
         st.info("👶 **Free Demo**\n\nNo Download.\nView Examples Only.")
         if st.button("Enter Demo Mode", use_container_width=True):
             st.session_state.user_data = {"email": "guest", "plan_type": "DEMO", "credits": 0}
             st.rerun()
             
-    # 2. SINGLE PASS
+    # SINGLE PASS
     with c2:
         st.warning("⚡ **Single CV Pass**\n\n**KES 50 / $0.50**\n3 Generation Limit.")
         with st.popover("Buy Single Pass"):
             st.write("1. Pay **KES 50** via M-Pesa/IntaSend:")
             st.markdown(f"[**Pay Link**]({LINK_SINGLE})")
-            st.write("2. Or Pay **$0.50** via PayPal:")
+            st.write("2. Pay **$0.50** via PayPal:")
             st.markdown(f"[**PayPal Link**]({PAYPAL_ME_LINK}/0.50USD)")
             
             st.divider()
-            email_pay = st.text_input("Your Email (for credits):", value=login_email if 'login_email' in locals() else "")
+            email_pay = st.text_input("Your Email:", value=login_email if 'login_email' in locals() else "")
             code_pay = st.text_input("Transaction Code:")
             
-            if st.button("Verify & Activate Single Pass"):
+            if st.button("Verify & Activate"):
                 if verify_code_simulated(code_pay) and "@" in email_pay:
+                    # Register/Update user to SINGLE plan
                     if register_user(email_pay, "SINGLE", 3, 1):
                         st.session_state.user_data = login_user(email_pay)
                         st.balloons()
-                        st.success("Activated! Redirecting...")
+                        st.success("✅ Account Registered & Pass Activated!")
                         time.sleep(2)
                         st.rerun()
                 else:
-                    st.error("Invalid Code or Email.")
+                    st.error("Invalid Code/Email.")
 
-    # 3. MONTHLY TRIAL
+    # MONTHLY TRIAL (UPDATED LOGIC)
     with c3:
         st.success("🏆 **Monthly Pro**\n\n**3 DAYS FREE TRIAL**\nThen KES 1000/mo.")
         with st.popover("Start Free Trial"):
-            st.write("**Register for Trial**")
+            st.write("**Register & Start Trial**")
             t_email = st.text_input("Email Address", value=login_email if 'login_email' in locals() else "")
             t_phone = st.text_input("Phone (for future billing)")
             t_method = st.radio("Future Payment:", ["M-Pesa", "Card", "PayPal"])
             
             if st.button("Start 3-Day Free Trial"):
                 if "@" in t_email and len(t_phone) > 5:
-                    if register_user(t_email, "TRIAL_MONTHLY", 9999, 3):
+                    # ✅ THIS LINE REGISTERS THE USER AUTOMATICALLY
+                    success = register_user(t_email, "TRIAL_MONTHLY", 9999, 3)
+                    
+                    if success:
+                        # ✅ LOG THEM IN IMMEDIATELY
                         st.session_state.user_data = login_user(t_email)
                         st.balloons()
-                        st.success("Trial Started! Redirecting...")
+                        st.success("✅ Account Created & Trial Started! Redirecting...")
                         time.sleep(2)
                         st.rerun()
+                    else:
+                        st.error("Registration Failed. Check connection.")
                 else:
-                    st.error("Invalid Details.")
+                    st.error("Invalid Email or Phone.")
+
 # =========================================================
-# ⚙️ MAIN APPLICATION
+# ⚙️ MAIN APP LOGIC
 # =========================================================
 def show_main_app():
     st.markdown(PROTECTED_CSS, unsafe_allow_html=True)
     
     user = st.session_state.user_data
-    # If user data is None (should not happen here), return to auth
     if not user:
         st.session_state.user_data = None
         st.rerun()
@@ -244,159 +245,103 @@ def show_main_app():
 
     is_demo = user.get("plan_type") == "DEMO"
     
-    # --- CHECK EXPIRY & CREDITS ---
-    if not is_demo:
-        # Check Date
-        expiry_str = user.get('expiry_date')
-        if expiry_str:
-            try:
-                expiry_dt = dateutil.parser.isoparse(expiry_str)
-                # Naive comparison fallback if tz info missing
-                now = datetime.now(expiry_dt.tzinfo)
-                if now > expiry_dt:
-                    st.error("⏳ Your plan has expired. Please renew.")
-                    if st.button("Logout"):
-                        st.session_state.user_data = None
-                        st.rerun()
-                    return
-            except:
-                pass # Ignore date parsing errors
-
-        # Check Credits
-        credits_left = user.get('credits', 0)
-        
-        # Display Banner
-        if user.get("plan_type") == "TRIAL_MONTHLY":
-            st.markdown(f"<div class='trial-banner'>💎 <b>TRIAL ACTIVE:</b> Unlimited generations.</div>", unsafe_allow_html=True)
-        elif user.get("plan_type") == "SINGLE":
-            st.markdown(f"<div class='trial-banner' style='background-color:#fff3cd; color:#856404; border-color:#ffeeba;'>⚡ <b>SINGLE PASS:</b> {credits_left} Generations Remaining.</div>", unsafe_allow_html=True)
+    # Check Expiry
+    if not is_demo and user.get('expiry_date'):
+        try:
+            expiry_dt = dateutil.parser.isoparse(user['expiry_date'])
+            now = datetime.now(expiry_dt.tzinfo)
+            if now > expiry_dt:
+                st.error("⏳ Your plan has expired. Please renew.")
+                if st.button("Logout"):
+                    st.session_state.user_data = None
+                    st.rerun()
+                return
+            
+            # Show Banners
+            if user.get("plan_type") == "TRIAL_MONTHLY":
+                days_left = (expiry_dt - now).days
+                st.markdown(f"<div class='trial-banner'>💎 <b>TRIAL ACTIVE:</b> {days_left} days left. Unlimited generations.</div>", unsafe_allow_html=True)
+            elif user.get("plan_type") == "SINGLE":
+                st.markdown(f"<div class='trial-banner' style='background-color:#fff3cd; color:#856404; border-color:#ffeeba;'>⚡ <b>SINGLE PASS:</b> {user.get('credits',0)} Left.</div>", unsafe_allow_html=True)
+        except: pass
 
     st.title("🚀 AI Resume Builder")
     
-    # --- 1. CONFIGURATION ---
+    # 1. SETUP
     st.subheader("1. Setup")
     col_cat, col_region, col_style = st.columns(3)
-    
     with col_cat:
-        cv_category = st.selectbox("Role / Industry", [
-            "Corporate / Administration", "NGO / United Nations", 
-            "Tech / Software / IT", "Medical / Healthcare",
-            "Engineering", "Sales / Marketing",
-            "Entry-Level / Internship"
-        ])
+        cv_category = st.selectbox("Industry", ["Corporate", "NGO/Development", "Tech/IT", "Healthcare", "Engineering", "Sales", "Entry-Level"])
     with col_region:
-        cv_region = st.selectbox("Region / Standard", [
-            "🇰🇪 Kenya / UK (Standard CV)", "🇺🇸 USA (Resume)",
-            "🇪🇺 Europe (Europass)", "🇨🇦 Canada",
-            "🇦🇪 Middle East", "🌏 International"
-        ])
+        cv_region = st.selectbox("Standard", ["🇰🇪 Kenya/UK", "🇺🇸 USA (Resume)", "🇪🇺 Europass", "🇨🇦 Canada", "🇦🇪 Gulf/Middle East", "🌏 International"])
     with col_style:
-        visual_style = st.selectbox("Visual Template", ["Modern Clean", "Classic Professional", "Executive"])
+        visual_style = st.selectbox("Template", ["Modern Clean", "Classic Professional", "Executive"])
 
-    # --- SIDEBAR INFO ---
+    # SIDEBAR
     with st.sidebar:
-        st.info(f"👤 User: {user.get('email')}")
-        if is_demo:
-            st.warning("👀 DEMO MODE")
-            if st.button("Logout / Purchase"):
-                st.session_state.user_data = None
-                st.rerun()
-        else:
-            st.metric("Credits Left", user.get('credits', 0))
-            if st.button("Logout"):
-                st.session_state.user_data = None
-                st.rerun()
+        st.info(f"👤 {user.get('email')}")
+        if not is_demo: st.metric("Credits", user.get('credits', 0))
+        if st.button("Logout"):
+            st.session_state.user_data = None
+            st.rerun()
 
-    # --- 2. INPUTS (CENTERED) ---
+    # 2. INPUTS & GENERATE
     if is_demo:
         st.subheader(f"👁️ Preview: {cv_category}")
         cache_key = f"{cv_category}_{cv_region}"
         if cache_key not in st.session_state.demo_cache:
             st.session_state.demo_cache[cache_key] = generate_ai_content("DEMO", cv_region, "DEMO", "DEMO", "DEMO")
         st.markdown(f"<div class='protected-view'><div class='watermark'>DEMO</div>{st.session_state.demo_cache[cache_key]}</div>", unsafe_allow_html=True)
-    
     else:
         st.header("2. Your Information")
         c_left, c_right = st.columns(2)
-        with c_left:
-             job_desc = st.text_area("Target Job Description (Optional):", height=250, placeholder="Paste job advert here...")
-        with c_right:
-             resume_text = st.text_area("Your Info (Work History, Education, Skills):", height=250, placeholder="Name: ...\nExperience: ...")
+        with c_left: job_desc = st.text_area("Job Description:", height=250)
+        with c_right: resume_text = st.text_area("Your Details:", height=250)
 
-        # --- GENERATE BUTTON ---
-        col_spacer, col_btn, col_spacer2 = st.columns([1, 2, 1])
+        col_sp, col_btn, col_sp2 = st.columns([1, 2, 1])
         with col_btn:
             if st.button("🚀 Generate Optimized CV", type="primary", use_container_width=True):
-                # Check DB credits again before generating
-                current_user = login_user(user['email'])
-                # If DB is down or user not found, fallback to session state credit check
-                credits = current_user['credits'] if current_user else user.get('credits', 0)
+                # Verify credits one last time
+                fresh_user = login_user(user['email'])
+                creds = fresh_user['credits'] if fresh_user else user.get('credits', 0)
                 
-                if credits < 1:
-                    st.error("🚫 You have 0 credits left. Please top up.")
-                elif not resume_text: 
-                    st.warning("Please enter your information.")
+                if creds < 1:
+                    st.error("🚫 0 Credits remaining. Please top up.")
+                elif not resume_text:
+                    st.warning("Enter details first.")
                 else:
-                    with st.spinner("Connecting to AI..."):
+                    with st.spinner("AI Working..."):
                         res = generate_ai_content(cv_category, cv_region, visual_style, resume_text, job_desc)
                         st.session_state.generated_resume = res
-                        
-                        # 🔥 DEDUCT CREDIT IN DB
-                        if current_user:
-                            deduct_credit(user['email'], credits)
-                        st.success("Generated! Credit deducted.")
-                        time.sleep(1)
+                        if fresh_user: deduct_credit(user['email'], creds)
                         st.rerun()
 
-        # --- EDITOR & DOWNLOAD ---
         if st.session_state.generated_resume:
             st.divider()
-            st.header("3. Review & Download")
-            st.text_area("Editor:", st.session_state.generated_resume, height=600)
-            st.download_button(f"📥 Download {cv_region} CV", create_styled_docx(st.session_state.generated_resume), "Professional_CV.docx", type="primary")
+            st.header("3. Download")
+            st.text_area("Editor:", st.session_state.generated_resume, height=500)
+            st.download_button("📥 Download .docx", create_styled_docx(st.session_state.generated_resume), "CV.docx", type="primary")
 
 # =========================================================
-# 🧠 AI & DOC HELPERS
+# 🧠 AI HELPERS
 # =========================================================
 def generate_ai_content(cat, region, style, res, job):
-    if cat == "DEMO": return "This is a demo preview text..."
-    if not GROQ_API_KEY: return "Error: Groq API Key missing."
-    
-    prompt = f"""
-    Act as an expert Resume Writer for a '{cat}' role.
-    TARGET REGION: {region}
-    STYLE: {style}
-    
-    RULES:
-    - USA: 1 page, no personal details.
-    - Kenya/UK: Standard CV format.
-    - Europe: Europass structure.
-    
-    USER INFO: {res}
-    JOB DESC: {job}
-    
-    Return ONLY the resume text.
-    """
-    
+    if cat == "DEMO": return "Demo Content..."
+    if not GROQ_API_KEY: return "Error: API Key missing."
+    prompt = f"Write a {region} style resume for {cat}. Style: {style}. \nUser Info: {res}\nJob: {job}"
     try:
         client = Groq(api_key=GROQ_API_KEY)
         return client.chat.completions.create(messages=[{"role":"user","content":prompt}],model="llama-3.3-70b-versatile").choices[0].message.content
-    except Exception as e: return f"AI Error: {str(e)}"
+    except Exception as e: return f"AI Error: {e}"
 
 def create_styled_docx(text):
     doc = Document()
-    style = doc.styles['Normal']
-    font = style.font
-    font.name = 'Calibri'
-    font.size = Pt(11)
-    for line in text.split('\n'):
-        doc.add_paragraph(line)
+    style = doc.styles['Normal']; font = style.font; font.name = 'Calibri'; font.size = Pt(11)
+    for line in text.split('\n'): doc.add_paragraph(line)
     buffer = io.BytesIO(); doc.save(buffer); buffer.seek(0)
     return buffer
 
-# --- RUN CHECK ---
 if st.session_state.user_data is None:
     show_auth_screen()
 else:
     show_main_app()
-
