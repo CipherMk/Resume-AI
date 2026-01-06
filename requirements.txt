@@ -3,3 +3,4 @@ groq
 python-docx
 requests
 supabase
+python-dateutil
