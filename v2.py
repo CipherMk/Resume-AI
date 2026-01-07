@@ -1,13 +1,15 @@
 import streamlit as st
 import requests
 import time
+import datetime
 from groq import Groq
 from docx import Document
 from docx.shared import Pt
 import io
+import extra_streamlit_components as stx # pip install extra-streamlit-components
 
 # --- ⚠️ CONFIGURATION ---
-st.set_page_config(page_title="CareerFlow | Professional CV Architect", page_icon="👔", layout="wide")
+st.set_page_config(page_title="CareerFlow | Global CV Architect", page_icon="🌍", layout="wide")
 
 # Safe Secret Access
 try:
@@ -16,11 +18,16 @@ try:
     INTASEND_SEC_KEY = st.secrets["INTASEND_SECRET_KEY"]
     PAYMENT_LINK_URL = st.secrets["INTASEND_PAYMENT_LINK"]
 except:
-    # Fallback for first run/debugging
     GROQ_KEY = ""
     INTASEND_PUB_KEY = ""
     INTASEND_SEC_KEY = ""
     PAYMENT_LINK_URL = "#"
+
+# --- 🍪 COOKIE MANAGER SETUP ---
+def get_manager():
+    return stx.CookieManager()
+
+cookie_manager = get_manager()
 
 # --- 🎨 ENTERPRISE STYLING ---
 def inject_custom_css():
@@ -65,7 +72,7 @@ def inject_custom_css():
             border: 1px solid #cbd5e1;
             padding: 40px;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            font-family: 'Merriweather', serif; /* Serif for that "Document" feel */
+            font-family: 'Merriweather', serif;
             color: #0f172a;
             font-size: 0.95rem;
             line-height: 1.7;
@@ -85,12 +92,19 @@ def inject_custom_css():
 
 inject_custom_css()
 
-# --- STATE MANAGEMENT ---
+# --- STATE MANAGEMENT (SYNCED WITH COOKIES) ---
+MAX_FREE_USES = 2
+
 if 'is_pro' not in st.session_state: st.session_state.is_pro = False
-if 'free_uses' not in st.session_state: st.session_state.free_uses = 0
 if 'generated_resume' not in st.session_state: st.session_state.generated_resume = None
 
-MAX_FREE_USES = 2
+# Load Free Uses from Cookie (Persist across refresh)
+cookie_uses = cookie_manager.get(cookie="careerflow_uses")
+if cookie_uses is None:
+    if 'free_uses' not in st.session_state:
+        st.session_state.free_uses = 0
+else:
+    st.session_state.free_uses = int(cookie_uses)
 
 # =========================================================
 # 💰 LOGIC: PAYMENT & ACCESS
@@ -100,13 +114,11 @@ def verify_payment():
     tracking_id = query_params.get("tracking_id", None)
     
     if tracking_id:
-        # TEST BACKDOOR (REMOVE IN PRODUCTION)
         if tracking_id == "TEST-ADMIN":
             st.session_state.is_pro = True
             st.toast("👨‍💻 Admin Test Access Granted")
             return
 
-        # REAL VERIFICATION
         url = "https://payment.intasend.com/api/v1/payment/status/"
         headers = {"Authorization": f"Bearer {INTASEND_SEC_KEY}", "Content-Type": "application/json"}
         try:
@@ -127,27 +139,27 @@ def show_landing_content():
     # 1. HERO SECTION
     st.markdown("""
     <div class="hero-box">
-        <div class="hero-title">CareerFlow AI Architect</div>
-        <div class="hero-sub">Stop getting rejected by robots. Build ATS-optimized, executive-grade resumes and cover letters in seconds.</div>
+        <div class="hero-title">CareerFlow Global Architect</div>
+        <div class="hero-sub">Region-Specific, ATS-Optimized Resumes & CVs. <br>Built for the US, UK, Kenya, and Europe.</div>
     </div>
     """, unsafe_allow_html=True)
 
-    # 2. WHY IT MATTERS (3 Columns)
+    # 2. WHY IT MATTERS
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown("""
         <div class="value-card">
-            <span class="icon-header">🤖</span>
-            <div class="card-title">Beat the ATS Algorithm</div>
-            <p>75% of resumes are deleted by software before a human sees them. Our AI injects the exact keywords and formatting required to pass the screen.</p>
+            <span class="icon-header">🌍</span>
+            <div class="card-title">Region Smart</div>
+            <p>A US Resume is different from a Kenyan CV. We automatically adjust spelling (Color vs Colour), paper size, and layout based on your target country.</p>
         </div>
         """, unsafe_allow_html=True)
     with c2:
         st.markdown("""
         <div class="value-card">
-            <span class="icon-header">✍️</span>
-            <div class="card-title">Persuasive Cover Letters</div>
-            <p>Don't just summarize your CV. We generate narrative-driven letters that connect your past achievements to the company's future goals.</p>
+            <span class="icon-header">🤖</span>
+            <div class="card-title">Beat the ATS</div>
+            <p>We analyze the job description to inject the exact keywords required to pass the Applicant Tracking System (ATS) filters.</p>
         </div>
         """, unsafe_allow_html=True)
     with c3:
@@ -155,59 +167,63 @@ def show_landing_content():
         <div class="value-card">
             <span class="icon-header">✨</span>
             <div class="card-title">Executive Formatting</div>
-            <p>Clean, modern, and readable. Whether you are in Tech, Finance, or Healthcare, we provide the standard that hiring managers expect.</p>
+            <p>Clean, modern, and readable. Whether for Corporate, Tech, or Medical, we provide the standard that hiring managers expect.</p>
         </div>
         """, unsafe_allow_html=True)
 
     st.markdown("<br><hr><br>", unsafe_allow_html=True)
 
-    # 3. LIVE SAMPLES (The user asked for this)
+    # 3. LIVE SAMPLES
     st.subheader("👁️ See What You Get")
-    st.markdown("Unlike other tools, we don't hide our quality. Here are **real examples** of what CareerFlow generates.")
+    st.markdown("We generate documents that match the job you want. Here is a **Kenya/UK Standard CV** vs a **US Standard Resume**.")
     
-    tab_res, tab_cov = st.tabs(["📄 Resume Sample (Tech)", "✉️ Cover Letter Sample"])
+    tab_ke, tab_us = st.tabs(["🇰🇪 Kenyan/UK CV Sample", "🇺🇸 US Resume Sample"])
     
-    with tab_res:
+    with tab_ke:
         st.markdown("""
         <div class="paper-preview">
             <div class="paper-header">
-                <div class="paper-h1">ALEX J. MERCER</div>
-                <div class="paper-sub">San Francisco, CA | alex.mercer@email.com | (555) 123-4567</div>
+                <div class="paper-h1">SARAH W. KAMAU</div>
+                <div class="paper-sub">Nairobi, Kenya | sarah.kamau@email.com | +254 712 345 678</div>
             </div>
-            <p><strong>PROFESSIONAL SUMMARY</strong><br>
-            Results-oriented Senior Project Manager with 7+ years of experience leading cross-functional teams in the Fintech sector. Proven track record of reducing deployment cycles by 40% and managing budgets up to $2M. Expert in Agile methodologies and stakeholder management.</p>
+            <p><strong>PROFESSIONAL PROFILE</strong><br>
+            Chartered Accountant (CPA-K) with 8 years of experience in financial auditing and tax compliance within the East African market. Proven ability to streamline payroll systems for 500+ employees. Seeking to leverage expertise in KRA compliance and SAP ERP at Equity Bank.</p>
             
-            <p><strong>EXPERIENCE</strong></p>
-            <p><strong>Global Tech Solutions</strong> | <em>Senior Product Manager</em> | 2019 – Present</p>
+            <p><strong>WORK EXPERIENCE</strong></p>
+            <p><strong>Nairobi Financial Solutions</strong> | <em>Senior Auditor</em> | Jan 2019 – Present</p>
             <ul>
-                <li>Spearheaded the launch of "PayFlow 2.0", resulting in a <strong>25% increase in user retention</strong> within Q1.</li>
-                <li>Optimized internal workflows using JIRA automation, saving the engineering team 15 hours per week.</li>
-                <li>Mentored 4 junior PMs, facilitating their promotion to mid-level roles within 18 months.</li>
-            </ul>
-            <p><strong>Innovate Corp</strong> | <em>Product Analyst</em> | 2016 – 2019</p>
-            <ul>
-                <li>Analyzed user data using SQL and Python to identify bottlenecks in the onboarding process.</li>
-                <li>Collaborated with UX designers to redesign the mobile interface, boosting conversion rates by 12%.</li>
+                <li>Led external audits for 15 SME clients, ensuring 100% compliance with IFRS standards.</li>
+                <li>Implemented a new VAT filing system that reduced penalty risks by 95%.</li>
+                <li>Supervised a team of 4 junior accountants, organising weekly training on tax laws.</li>
             </ul>
             
-            <p><strong>SKILLS</strong></p>
-            <p>Agile/Scrum, Python, SQL, Tableau, Stakeholder Management, Strategic Planning.</p>
+            <p><strong>EDUCATION</strong></p>
+            <p><strong>University of Nairobi</strong> | <em>Bachelor of Commerce (Finance)</em> | Second Class Honours (Upper Division)</p>
+            
+            <p><strong>REFEREES</strong></p>
+            <p><em>Available upon request.</em></p>
         </div>
         """, unsafe_allow_html=True)
         
-    with tab_cov:
+    with tab_us:
         st.markdown("""
         <div class="paper-preview">
-            <p><strong>Date:</strong> October 24, 2024<br>
-            <strong>To:</strong> Hiring Manager, Stripe<br>
-            <strong>Re:</strong> Application for Senior Product Manager</p>
-            <br>
-            <p>Dear Hiring Team,</p>
-            <p>When I saw that Stripe was looking for a Senior Product Manager to lead the Global Payments expansion, I knew I had to apply. Having spent the last seven years optimizing fintech payment gateways at Global Tech Solutions, I have developed not just the technical expertise to manage complex APIs, but the strategic vision to scale them across new markets.</p>
-            <p>In my current role, I faced a challenge similar to what Stripe is tackling in Southeast Asia: high transaction failure rates due to local banking fragmentation. By leading a cross-functional team of 15 engineers, I implemented a dynamic routing algorithm that reduced failure rates by 40% and recovered $2M in annual revenue. I am eager to bring this same data-driven, problem-solving approach to your team.</p>
-            <p>Beyond the metrics, I am passionate about user experience. I believe that payment infrastructure should be invisible to the user, and I admire Stripe’s commitment to that seamlessness. I would welcome the opportunity to discuss how my background in Agile leadership and API product management can help Stripe achieve its Q4 expansion goals.</p>
-            <p>Sincerely,</p>
-            <p>Alex J. Mercer</p>
+            <div class="paper-header">
+                <div class="paper-h1">SARAH KAMAU</div>
+                <div class="paper-sub">New York, NY | sarah.kamau@email.com | (555) 123-4567</div>
+            </div>
+            <p><strong>SUMMARY</strong><br>
+            CPA-certified Financial Analyst specializing in GAAP compliance and risk assessment. Reduced audit turnaround time by 20% through automated reporting workflows.</p>
+            
+            <p><strong>EXPERIENCE</strong></p>
+            <p><strong>Global Finance LLC</strong> | <em>Senior Analyst</em> | 2019 – Present</p>
+            <ul>
+                <li>Managed quarterly audit cycles for $50M portfolio, achieving zero non-compliance findings.</li>
+                <li>Optimized tax reporting processes using Python scripts, saving 10 labor hours weekly.</li>
+            </ul>
+            
+            <p><strong>SKILLS</strong></p>
+            <p>GAAP, SAP ERP, Python (Pandas), Financial Modeling, Regulatory Compliance.</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -230,57 +246,80 @@ def show_app():
 
     # CHECK LIMITS
     if not st.session_state.is_pro and st.session_state.free_uses >= MAX_FREE_USES:
-        # --- PAYWALL VIEW ---
-        st.warning("🔒 Free Trial Limit Reached")
+        st.warning("🔒 Free Limit Reached")
         col_pay1, col_pay2 = st.columns(2)
         with col_pay1:
-            st.markdown("""
-            ### 🚀 Unlock Pro Access
-            **Price:** KES 150 / $1.20 (24 Hour Pass)
-            
-            **What you get:**
-            * ✅ Unlimited AI Generations
-            * ✅ Advanced ATS Optimization
-            * ✅ Cover Letter & Resume Modes
-            * ✅ Instant Download
-            """)
+            st.markdown("### 🚀 Get the Day Pass\n**Price:** KES 150\n\n* ✅ Unlimited Generations\n* ✅ All Region Formats")
         with col_pay2:
             st.markdown("<br>", unsafe_allow_html=True)
-            st.link_button("👉 Pay Securely with M-Pesa / Card", PAYMENT_LINK_URL, type="primary", use_container_width=True)
-            st.caption("Auto-redirects back here after payment.")
+            st.link_button("👉 Pay with M-Pesa", PAYMENT_LINK_URL, type="primary", use_container_width=True)
         return
 
     # --- BUILDER FORM ---
     with st.form("builder_form"):
+        # ROW 1: Type & Region
         col_meta1, col_meta2 = st.columns(2)
         with col_meta1:
-            doc_type = st.selectbox("Document Type", ["Resume (ATS Optimized)", "Cover Letter (Persuasive)"])
+            doc_type = st.selectbox("Document Type", ["Resume / CV", "Cover Letter"])
         with col_meta2:
-            industry = st.selectbox("Target Industry", ["Corporate / General", "Tech / Software", "Medical / Healthcare", "Creative / Design"])
+            # 🌍 NEW: REGION SELECTOR
+            region = st.selectbox("Target Region format", [
+                "Kenya / UK (British English, A4, 'CV')", 
+                "USA / Canada (American English, Letter, 'Resume')",
+                "Europe (Europass Standard)"
+            ])
 
-        job_desc = st.text_area("1. Paste the Job Description (Required)", height=150, placeholder="Paste the full job advert here. The AI needs this to extract keywords...")
-        user_cv = st.text_area("2. Paste Your Experience / Old CV", height=150, placeholder="Paste your work history, skills, and education here...")
+        # ROW 2: Industry
+        industry = st.selectbox("Industry", ["Corporate", "Tech", "Medical", "Creative"])
+
+        job_desc = st.text_area("1. Paste Job Advertisement", height=150, placeholder="The AI will extract keywords from here...")
+        user_cv = st.text_area("2. Paste Your Experience", height=150, placeholder="Your work history, education, and skills...")
         
         submitted = st.form_submit_button("✨ Generate Document", type="primary", use_container_width=True)
 
     if submitted:
         if not job_desc or not user_cv:
-            st.error("⚠️ Please fill in both the Job Description and your Experience.")
+            st.error("⚠️ Please fill in all fields.")
         else:
             if not GROQ_KEY:
                 st.error("System Error: AI Key missing.")
             else:
-                with st.spinner("🤖 Analyzing keywords & drafting content..."):
-                    # SIMULATE AI CALL (Replace with real call below)
+                with st.spinner("🤖 Applying regional formatting & keywords..."):
                     try:
                         client = Groq(api_key=GROQ_KEY)
-                        prompt = f"Write a {doc_type} for {industry}. Job: {job_desc}. My Info: {user_cv}. Professional tone."
+                        
+                        # 🧠 DYNAMIC PROMPT BASED ON REGION
+                        prompt = f"""
+                        Act as a professional career coach. Write a {doc_type} for the {industry} industry.
+                        
+                        TARGET REGION: {region}
+                        
+                        STRICT REGIONAL RULES:
+                        - If Kenya/UK: Use British spelling (e.g., 'Organised', 'Colour'), date format DD/MM/YYYY, and header "Curriculum Vitae".
+                        - If USA: Use American spelling (e.g., 'Organized', 'Color'), date format MM/DD/YYYY, and header "Resume".
+                        - No Photos (indicate [Photo Placeholder] only if region is Europe).
+                        
+                        CONTEXT:
+                        - Job Description: {job_desc}
+                        - User Experience: {user_cv}
+                        
+                        INSTRUCTIONS:
+                        1. Optimize heavily for ATS keywords found in the Job Description.
+                        2. Use strong action verbs.
+                        3. Format clearly with headers.
+                        """
+                        
                         response = client.chat.completions.create(messages=[{"role":"user","content":prompt}],model="llama-3.3-70b-versatile")
                         result_text = response.choices[0].message.content
                         
                         st.session_state.generated_resume = result_text
+                        
+                        # 🍪 UPDATE COOKIE & STATE
                         if not st.session_state.is_pro:
                             st.session_state.free_uses += 1
+                            # Set cookie to expire in 30 days
+                            cookie_manager.set("careerflow_uses", st.session_state.free_uses, expires_at=datetime.datetime.now() + datetime.timedelta(days=30))
+                            
                         st.rerun()
                     except Exception as e:
                         st.error(f"AI Error: {e}")
@@ -289,11 +328,8 @@ def show_app():
     if st.session_state.generated_resume:
         st.divider()
         st.subheader("🎉 Your Draft is Ready")
-        
-        # EDITABLE AREA
         final_text = st.text_area("Editor", st.session_state.generated_resume, height=500)
         
-        # WORD DOC GENERATOR
         doc = Document()
         style = doc.styles['Normal']
         font = style.font
@@ -306,16 +342,14 @@ def show_app():
         doc.save(buffer)
         buffer.seek(0)
         
-        st.download_button("📥 Download Word Doc", data=buffer, file_name="CareerFlow_Draft.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", type="primary")
+        st.download_button("📥 Download Word Doc", data=buffer, file_name=f"CareerFlow_{region.split()[0]}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", type="primary")
 
 # =========================================================
-# 🚀 APP ORCHESTRATION
+# 🚀 APP START
 # =========================================================
 
-# 1. SHOW MARKETING CONTENT (If no generation yet)
+# Only show marketing if they haven't generated anything yet
 if not st.session_state.generated_resume and st.session_state.free_uses == 0:
     show_landing_content()
-    st.markdown("<h2 style='text-align:center'>👇 Start Building Now</h2>", unsafe_allow_html=True)
 
-# 2. SHOW APP
 show_app()
