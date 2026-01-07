@@ -8,8 +8,8 @@ from docx.shared import Pt
 import io
 import extra_streamlit_components as stx 
 
-# --- ⚠️ CONFIGURATION ---
-st.set_page_config(page_title="CareerFlow | Global CV Architect", page_icon="🌍", layout="wide")
+# --- ⚠️ CONFIGURATION & PAGE SETUP ---
+st.set_page_config(page_title="CareerFlow | Professional CV Architect", page_icon="💼", layout="wide")
 
 # --- 🔐 SECRETS ---
 try:
@@ -17,189 +17,279 @@ try:
     INTASEND_SEC_KEY = st.secrets["INTASEND_SECRET_KEY"] 
     PAYMENT_LINK_URL = st.secrets["INTASEND_PAYMENT_LINK"]
 except:
+    # Fallback to prevent crash, but app won't work fully
     GROQ_KEY = ""
     INTASEND_SEC_KEY = ""
     PAYMENT_LINK_URL = "#"
 
-# --- 🍪 COOKIE MANAGER ---
+# --- 🍪 COOKIE MANAGER (Persistence Engine) ---
+@st.cache_resource(experimental_allow_widgets=True)
 def get_manager():
     return stx.CookieManager()
 
 cookie_manager = get_manager()
 
-# --- 🎨 STYLING ---
+# --- 🎨 PROFESSIONAL STYLING (CSS) ---
 def inject_custom_css():
     st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
-        .block-container { padding-top: 2rem; }
+        
+        /* Base Styles */
+        .block-container { padding-top: 1.5rem; }
+        h1, h2, h3, h4, p, div { font-family: 'Inter', sans-serif; }
+        
+        /* HERO SECTION */
         .hero-box {
-            background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
-            color: white; padding: 60px 40px; border-radius: 12px; text-align: center; margin-bottom: 40px;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: white;
+            padding: 50px 30px;
+            border-radius: 16px;
+            text-align: center;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
         }
-        .hero-title { font-size: 3rem; font-weight: 800; color: white; }
-        .badge-credits { background: #dcfce7; color: #166534; padding: 6px 16px; border-radius: 20px; font-weight: 700; border: 1px solid #166534; }
-        .badge-low { background: #fee2e2; color: #991b1b; padding: 6px 16px; border-radius: 20px; font-weight: 700; border: 1px solid #991b1b; }
+        .hero-title { font-size: 2.5rem; font-weight: 800; color: white; margin-bottom: 10px; }
+        .hero-sub { color: #cbd5e1; font-size: 1.1rem; max-width: 600px; margin: 0 auto; }
+
+        /* CREDIT BADGES */
+        .badge-pro { 
+            background: #dcfce7; color: #15803d; border: 1px solid #15803d; 
+            padding: 5px 15px; border-radius: 50px; font-weight: 700; font-size: 0.9rem;
+        }
+        .badge-free { 
+            background: #fff7ed; color: #c2410c; border: 1px solid #c2410c; 
+            padding: 5px 15px; border-radius: 50px; font-weight: 700; font-size: 0.9rem;
+        }
+
+        /* PAPER PREVIEW */
+        .paper-preview {
+            background: white; border: 1px solid #e2e8f0; padding: 40px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            min-height: 500px; font-family: 'Times New Roman', serif; color: #333;
+            margin-top: 20px; border-radius: 4px;
+        }
     </style>
     """, unsafe_allow_html=True)
 
 inject_custom_css()
 
 # =========================================================
-# 💾 STATE & CREDIT MANAGEMENT
+# 💾 CREDIT LOGIC (The Brain)
 # =========================================================
 
-# 1. Initialize result container if missing
-if 'generated_resume' not in st.session_state: 
-    st.session_state.generated_resume = None
+# 1. Initialize Session State
+if 'generated_resume' not in st.session_state: st.session_state.generated_resume = None
 
-# 2. LOAD CREDITS (Priority: Cookie -> Default to 2)
+# 2. Load Credits from Cookie (Priority) or Default to 2
 if 'credits' not in st.session_state:
     saved_credits = cookie_manager.get("careerflow_credits")
     if saved_credits is not None:
         st.session_state.credits = int(saved_credits)
     else:
-        st.session_state.credits = 2 # Default Free Trial
+        st.session_state.credits = 2 # 🎁 Start with 2 Free Credits
 
 # =========================================================
-# 💰 LOGIC: PAYMENT & CREDIT TOP-UP
+# 💰 PAYMENT VERIFICATION (Robust Connection)
 # =========================================================
 def verify_payment():
+    # Get params
     query_params = st.query_params
     tracking_id = query_params.get("tracking_id", None) or query_params.get("checkout_id", None)
     
     if tracking_id:
+        # Admin Bypass
         if tracking_id == "TEST-ADMIN":
             st.session_state.credits = 100
-            st.toast("👨‍💻 Admin: 100 Credits Added")
+            cookie_manager.set("careerflow_credits", 100, expires_at=datetime.datetime.now() + datetime.timedelta(days=30))
+            st.toast("👨‍💻 Admin: 100 Credits Loaded")
             st.query_params.clear()
             return
 
-        st.toast("Verifying Payment...", icon="💳")
+        st.toast("Connecting to Payment Gateway...", icon="💳")
         
-        # Verify with IntaSend
+        # 🔗 INTASEND CONNECTION
+        # Note: We add a User-Agent to prevent '403 Forbidden' errors
         url = "https://payment.intasend.com/api/v1/payment/status/"
-        headers = {"Authorization": f"Bearer {INTASEND_SEC_KEY}", "Content-Type": "application/json"}
+        headers = {
+            "Authorization": f"Bearer {INTASEND_SEC_KEY}", 
+            "Content-Type": "application/json",
+            "User-Agent": "StreamlitApp/1.0"
+        }
         
         try:
-            res = requests.post(url, json={"invoice_id": tracking_id}, headers=headers)
+            res = requests.post(url, json={"invoice_id": tracking_id}, headers=headers, timeout=10)
             response_data = res.json()
             
+            # Check for success
             if response_data.get('invoice', {}).get('state') == 'COMPLETE':
-                # ✅ PAYMENT SUCCESS -> GIVE 100 CREDITS
+                # ✅ UPDATE CREDITS TO 100
                 st.session_state.credits = 100
                 
-                # 💾 Save to Cookie (Persist for 30 days)
+                # 💾 SAVE TO COOKIE (So they stay wealthy on refresh)
                 cookie_manager.set("careerflow_credits", 100, 
                                  expires_at=datetime.datetime.now() + datetime.timedelta(days=30))
                 
-                st.toast("🎉 Payment Verified! 100 Credits Added.", icon="✅")
+                st.toast("🎉 Payment Confirmed! 100 Credits Added.", icon="✅")
                 
-                st.query_params.clear() 
-                time.sleep(1.5)
+                # Cleanup
+                st.query_params.clear()
+                time.sleep(2)
                 st.rerun()
                 
             elif response_data.get('invoice', {}).get('state') == 'PENDING':
-                st.info("Payment processing...")
+                st.info("Payment is processing... please wait a moment.")
             else:
-                st.error("Payment failed.")
+                st.error("Payment was not completed. Please try again.")
+                
         except Exception as e:
-            st.error(f"Error: {e}")
+            # Handle connection refusals gracefully
+            st.error(f"Connection Error: {e}")
 
-# Run verification on load
+# Run verification immediately on load
 verify_payment()
 
 # =========================================================
-# 🤖 SAMPLE GENERATOR (AUTO-RUNS ON LOAD)
+# 📝 LANDING CONTENT (For First Time Users)
 # =========================================================
-def generate_live_sample(region, job_title):
-    if not GROQ_KEY: return "⚠️ API Key missing."
-    try:
-        client = Groq(api_key=GROQ_KEY)
-        prompt = f"Generate a short, dense {region} summary for a {job_title}. Use Markdown."
-        response = client.chat.completions.create(messages=[{"role":"user","content":prompt}], model="llama-3.3-70b-versatile")
-        return response.choices[0].message.content
-    except Exception as e: return f"Error: {e}"
+def show_hero():
+    st.markdown("""
+    <div class="hero-box">
+        <div class="hero-title">CareerFlow CV Architect</div>
+        <div class="hero-sub"> ATS-Optimized Resumes & CVs for Kenya, USA, and Europe.<br>Built by AI. Trusted by Professionals.</div>
+    </div>
+    """, unsafe_allow_html=True)
 
 # =========================================================
-# ⚙️ MAIN APP
+# ⚙️ MAIN APP INTERFACE
 # =========================================================
 def show_app():
-    # HEADER with CREDIT DISPLAY
-    c1, c2 = st.columns([3, 1])
-    with c1: 
+    
+    # 1. Show Header
+    c_head1, c_head2 = st.columns([3, 1])
+    with c_head1:
         st.title("🛠️ Resume Builder")
-    with c2:
-        # Display Credits
+    with c_head2:
+        # 💎 Credit Badge Logic
         creds = st.session_state.credits
-        if creds > 5:
-            st.markdown(f'<div style="text-align:right; margin-top:10px;"><span class="badge-credits">⚡ {creds} CREDITS LEFT</span></div>', unsafe_allow_html=True)
+        if creds > 10:
+             st.markdown(f'<div style="text-align:right; margin-top:15px;"><span class="badge-pro">💎 {creds} CREDITS (PRO)</span></div>', unsafe_allow_html=True)
         else:
-            st.markdown(f'<div style="text-align:right; margin-top:10px;"><span class="badge-low">⚠️ ONLY {creds} LEFT</span></div>', unsafe_allow_html=True)
+             st.markdown(f'<div style="text-align:right; margin-top:15px;"><span class="badge-free">⚡ {creds} FREE CREDITS</span></div>', unsafe_allow_html=True)
 
     st.divider()
 
-    # 🔒 CREDIT WALL (If 0 credits)
+    # 2. 🔒 Paywall Check (Block if 0 credits)
     if st.session_state.credits <= 0:
-        st.warning("🔒 You are out of credits.")
-        st.markdown(f"""
-        <div style="background:#f8f9fa; padding:30px; border-radius:10px; border:1px solid #ddd; text-align:center;">
-            <h3>🚀 Top Up Your Account</h3>
-            <p>Get <b>100 Credits</b> for KES 150.</p>
-            <br>
-            <a href="{PAYMENT_LINK_URL}" target="_self">
-                <button style="background:#0F172A; color:white; padding:12px 25px; border-radius:6px; border:none; cursor:pointer; font-weight:bold; font-size:16px;">
-                    👉 Buy 100 Credits (KES 150)
-                </button>
-            </a>
-        </div>
-        """, unsafe_allow_html=True)
+        st.warning("🔒 You have run out of free credits.")
+        
+        col_pay1, col_pay2 = st.columns([2, 1])
+        with col_pay1:
+            st.markdown("""
+            ### 🚀 Upgrade to Pro
+            **Get 100 Credits for KES 150**
+            * ✅ Generates 100 Resumes or Cover Letters
+            * ✅ Unlocks All Regional Formats
+            * ✅ Instant Access
+            """)
+        with col_pay2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if PAYMENT_LINK_URL != "#":
+                st.link_button("👉 Buy 100 Credits (KES 150)", PAYMENT_LINK_URL, type="primary", use_container_width=True)
+            else:
+                st.error("Payment link missing in secrets.")
         return
 
-    # 🛠️ BUILDER FORM
-    with st.form("builder"):
-        doc_type = st.selectbox("Document Type", ["Resume / CV", "Cover Letter"])
-        region = st.selectbox("Target Region", ["Kenya / UK", "USA / Canada", "Europe"])
-        job_desc = st.text_area("Job Description", height=100)
-        user_cv = st.text_area("Your Experience", height=100)
-        
-        # Show cost on button
-        submitted = st.form_submit_button("✨ Generate Document (Costs 1 Credit)", type="primary", use_container_width=True)
+    # 3. 🛠️ The Builder Form
+    with st.form("builder_form"):
+        col_meta1, col_meta2 = st.columns(2)
+        with col_meta1:
+            doc_type = st.selectbox("Document Type", ["Resume / CV", "Cover Letter"])
+        with col_meta2:
+            region = st.selectbox("Target Region format", [
+                "Kenya / UK (British English, A4)", 
+                "USA / Canada (American English, Letter)",
+                "Europe (Europass Standard)"
+            ])
 
+        industry = st.selectbox("Industry", ["Corporate / Business", "Tech / IT", "Medical / Health", "Creative / Design", "General"])
+
+        st.markdown("### 📄 Job Details")
+        job_desc = st.text_area("1. Paste Job Advertisement (The AI will extract keywords)", height=150)
+        user_cv = st.text_area("2. Paste Your Experience (Work history, education, skills)", height=150)
+        
+        # Submit Button with Cost Indication
+        submitted = st.form_submit_button(f"✨ Generate Document (Cost: 1 Credit)", type="primary", use_container_width=True)
+
+    # 4. 🧠 Generation Logic
     if submitted:
-        if not GROQ_KEY:
-            st.error("Missing API Key")
-        elif not job_desc or not user_cv:
-            st.error("Please fill in all fields.")
+        if not job_desc or not user_cv:
+            st.error("⚠️ Please fill in all fields.")
+        elif not GROQ_KEY:
+            st.error("⚠️ System Error: AI Key missing.")
         else:
-            with st.spinner("Generating..."):
+            with st.spinner("🤖 Analyzing keywords & formatting document..."):
                 try:
                     client = Groq(api_key=GROQ_KEY)
-                    prompt = f"Write a {doc_type} for {region}. Job: {job_desc}. My Info: {user_cv}"
-                    res = client.chat.completions.create(messages=[{"role":"user","content":prompt}], model="llama-3.3-70b-versatile")
                     
-                    st.session_state.generated_resume = res.choices[0].message.content
+                    # Region-Specific Prompting
+                    prompt = f"""
+                    Act as an expert Resume Writer for the {industry} industry.
+                    Write a {doc_type} targeting {region}.
                     
-                    # 💸 DEDUCT CREDIT & SAVE TO COOKIE
+                    STRICT FORMATTING RULES:
+                    - If Kenya/UK: Use British spelling (Colour, Organised), Date DD/MM/YYYY.
+                    - If USA: Use American spelling (Color, Organized), Date MM/DD/YYYY.
+                    
+                    INPUT DATA:
+                    Job Description: {job_desc}
+                    Candidate Info: {user_cv}
+                    
+                    INSTRUCTIONS:
+                    1. Use professional, dense headers.
+                    2. Use Markdown formatting.
+                    3. Quantify achievements where possible.
+                    """
+                    
+                    response = client.chat.completions.create(messages=[{"role":"user","content":prompt}],model="llama-3.3-70b-versatile")
+                    result_text = response.choices[0].message.content
+                    
+                    st.session_state.generated_resume = result_text
+                    
+                    # 💸 DEDUCT CREDIT
                     st.session_state.credits -= 1
+                    # 💾 UPDATE COOKIE
                     cookie_manager.set("careerflow_credits", st.session_state.credits, expires_at=datetime.datetime.now() + datetime.timedelta(days=30))
                     
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Error: {e}")
+                    st.error(f"AI Generation Error: {e}")
 
-    # RESULT DISPLAY
+    # 5. 📄 Result Display
     if st.session_state.generated_resume:
-        st.subheader("Result")
-        st.text_area("Copy your text", st.session_state.generated_resume, height=400)
+        st.markdown("---")
+        st.subheader("🎉 Your Document is Ready")
         
-        # Simple Download Logic
+        # Create Word Doc
         doc = Document()
-        doc.add_paragraph(st.session_state.generated_resume)
+        doc.add_paragraph(st.session_state.generated_resume) # Simplified for stability
         buffer = io.BytesIO()
         doc.save(buffer)
         buffer.seek(0)
-        st.download_button("📥 Download Word Doc", data=buffer, file_name="resume.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        
+        c_res1, c_res2 = st.columns([1, 1])
+        with c_res1:
+            st.download_button("📥 Download Word (.docx)", data=buffer, file_name=f"CareerFlow_Resume.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", type="primary", use_container_width=True)
+        
+        # Preview
+        st.markdown(f'<div class="paper-preview">{st.session_state.generated_resume}</div>', unsafe_allow_html=True)
 
-# Start App
+# =========================================================
+# 🚀 APP STARTUP
+# =========================================================
+
+# Only show Hero if they haven't generated anything yet
+if not st.session_state.generated_resume:
+    show_hero()
+
 show_app()
