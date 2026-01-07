@@ -6,30 +6,20 @@ from groq import Groq
 from docx import Document
 from docx.shared import Pt
 import io
-import extra_streamlit_components as stx # pip install extra-streamlit-components
-
-# Initialize Session State
-if 'is_pro' not in st.session_state:
-    st.session_state.is_pro = False
-
-# ... other imports ...
-
-# Only run verification if they are NOT pro yet
-if not st.session_state.is_pro:
-    verify_payment()
+import extra_streamlit_components as stx 
 
 # --- ⚠️ CONFIGURATION ---
 st.set_page_config(page_title="CareerFlow | Global CV Architect", page_icon="🌍", layout="wide")
 
-# Safe Secret Access
+# --- 🔐 SECRETS MANAGEMENT ---
 try:
     GROQ_KEY = st.secrets["GROQ_API_KEY"]
-    INTASEND_PUB_KEY = st.secrets["INTASEND_PUBLISHABLE_KEY"]
-    INTASEND_SEC_KEY = st.secrets["INTASEND_SECRET_KEY"]
+    # Ensure you use the SECRET KEY (starts with ISSecretKey_), not the Publishable Key
+    INTASEND_SEC_KEY = st.secrets["INTASEND_SECRET_KEY"] 
     PAYMENT_LINK_URL = st.secrets["INTASEND_PAYMENT_LINK"]
 except:
+    # Fail gracefully if secrets aren't set yet
     GROQ_KEY = ""
-    INTASEND_PUB_KEY = ""
     INTASEND_SEC_KEY = ""
     PAYMENT_LINK_URL = "#"
 
@@ -39,7 +29,7 @@ def get_manager():
 
 cookie_manager = get_manager()
 
-# --- 🎨 ENTERPRISE STYLING ---
+# --- 🎨 CSS STYLING ---
 def inject_custom_css():
     st.markdown("""
     <style>
@@ -92,6 +82,7 @@ def inject_custom_css():
             max-width: 850px;
             margin-left: auto;
             margin-right: auto;
+            white-space: pre-wrap; /* Preserves formatting from AI */
         }
 
         /* STATUS BADGES */
@@ -102,9 +93,10 @@ def inject_custom_css():
 
 inject_custom_css()
 
-# --- STATE MANAGEMENT (SYNCED WITH COOKIES) ---
+# --- STATE MANAGEMENT ---
 MAX_FREE_USES = 2
 
+# Initialize Session State Variables
 if 'is_pro' not in st.session_state: st.session_state.is_pro = False
 if 'generated_resume' not in st.session_state: st.session_state.generated_resume = None
 if 'sample_ke' not in st.session_state: st.session_state.sample_ke = None
@@ -119,55 +111,22 @@ else:
     st.session_state.free_uses = int(cookie_uses)
 
 # =========================================================
-# 🤖 SAMPLE GENERATOR (AUTO-RUNS ON LOAD)
-# =========================================================
-def generate_live_sample(region, job_title):
-    """
-    Generates a sample CV using the AI to demonstrate capability to the user.
-    """
-    if not GROQ_KEY:
-        return "⚠️ System Error: API Key missing. Cannot generate sample."
-    
-    try:
-        client = Groq(api_key=GROQ_KEY)
-        prompt = f"""
-        Generate a realistic, text-heavy, ATS-Optimized {region} for a Senior {job_title}. 
-        
-        RULES:
-        1. Use Markdown formatting (## for headers, * for bullets).
-        2. Create a "Professional Summary" of 4 lines.
-        3. Create 2 roles in "Work Experience" with 5 detailed bullet points each (include numbers and metrics).
-        4. Do NOT use placeholders like [Date]. Invent realistic companies and dates.
-        5. If Kenya/UK: Use British English (e.g. 'Optimised').
-        6. If USA: Use American English (e.g. 'Optimized').
-        7. Make it look dense and professional.
-        """
-        response = client.chat.completions.create(messages=[{"role":"user","content":prompt}], model="llama-3.3-70b-versatile")
-        return response.choices[0].message.content
-    except Exception as e:
-        return f"Could not generate sample: {e}"
-
-# =========================================================
-# 💰 LOGIC: PAYMENT & ACCESS (DEBUG MODE)
+# 💰 LOGIC: PAYMENT VERIFICATION (DEBUG & FIX)
 # =========================================================
 def verify_payment():
     # 1. Get Query Parameters
     query_params = st.query_params
     
-    # DEBUG: Print what we received (Delete this line after it works)
-    # st.write("Debug - Params Received:", query_params) 
-
-    # 2. Check for ID (IntaSend sends 'tracking_id' OR 'checkout_id')
+    # 2. Check for ID (IntaSend can send 'tracking_id' OR 'checkout_id')
     tracking_id = query_params.get("tracking_id", None)
     if not tracking_id:
-        tracking_id = query_params.get("checkout_id", None) # sometimes it's this
+        tracking_id = query_params.get("checkout_id", None)
     
     if tracking_id:
-        # Check for Admin Bypass
+        # Admin Bypass
         if tracking_id == "TEST-ADMIN":
             st.session_state.is_pro = True
             st.toast("👨‍💻 Admin Test Access Granted")
-            # Clear params so we don't re-verify on refresh
             st.query_params.clear() 
             return
 
@@ -182,29 +141,57 @@ def verify_payment():
         
         try:
             res = requests.post(url, json={"invoice_id": tracking_id}, headers=headers)
-            
-            # DEBUG: See what IntaSend replied
-            # st.write("API Response:", res.json()) 
-            
             response_data = res.json()
+            
+            # DEBUG: Uncomment the line below if it still fails to see the exact error
+            # st.write("Debug API Response:", response_data) 
             
             # Check for specific "COMPLETE" state
             if response_data.get('invoice', {}).get('state') == 'COMPLETE':
                 st.session_state.is_pro = True
                 st.toast("🎉 Payment Verified! Access Unlocked.")
-                
-                # IMPORTANT: Clear the URL so if they refresh, it doesn't try to pay again
+                # IMPORTANT: Clear URL so refresh doesn't re-trigger
                 st.query_params.clear()
             
             elif response_data.get('invoice', {}).get('state') == 'PENDING':
-                st.warning("Payment is still processing. Please wait a moment.")
+                st.warning("Payment is processing. Please refresh in a moment.")
             
             else:
-                st.error(f"Payment Failed or Cancelled. Status: {response_data.get('invoice', {}).get('state')}")
+                st.error(f"Payment Status: {response_data.get('invoice', {}).get('state')}")
 
         except Exception as e:
             st.error(f"Connection Error: {e}")
 
+# Only run verification if they are NOT pro yet
+if not st.session_state.is_pro:
+    verify_payment()
+
+# =========================================================
+# 🤖 SAMPLE GENERATOR (AUTO-RUNS ON LOAD)
+# =========================================================
+def generate_live_sample(region, job_title):
+    """Generates a sample CV using the AI to demonstrate capability."""
+    if not GROQ_KEY:
+        return "⚠️ System Error: API Key missing. Cannot generate sample."
+    
+    try:
+        client = Groq(api_key=GROQ_KEY)
+        prompt = f"""
+        Generate a realistic, text-heavy, ATS-Optimized {region} for a Senior {job_title}. 
+        
+        RULES:
+        1. Use Markdown formatting.
+        2. Create a "Professional Summary" of 4 lines.
+        3. Create 2 roles in "Work Experience" with 5 detailed bullet points each (include metrics).
+        4. Do NOT use placeholders. Invent realistic companies and dates.
+        5. If Kenya/UK: Use British English (e.g. 'Optimised').
+        6. If USA: Use American English (e.g. 'Optimized').
+        7. Make it look dense and professional.
+        """
+        response = client.chat.completions.create(messages=[{"role":"user","content":prompt}], model="llama-3.3-70b-versatile")
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"Could not generate sample: {e}"
 
 # =========================================================
 # 📝 CONTENT: SAMPLES & EDUCATION
@@ -292,7 +279,10 @@ def show_app():
             st.markdown("### 🚀 Get the Day Pass\n**Price:** KES 150\n\n* ✅ Unlimited Generations\n* ✅ All Region Formats")
         with col_pay2:
             st.markdown("<br>", unsafe_allow_html=True)
-            st.link_button("👉 Pay with M-Pesa", PAYMENT_LINK_URL, type="primary", use_container_width=True)
+            if PAYMENT_LINK_URL != "#":
+                st.link_button("👉 Pay with M-Pesa", PAYMENT_LINK_URL, type="primary", use_container_width=True)
+            else:
+                st.error("Payment Link not configured.")
         return
 
     # --- BUILDER FORM ---
@@ -302,7 +292,6 @@ def show_app():
         with col_meta1:
             doc_type = st.selectbox("Document Type", ["Resume / CV", "Cover Letter"])
         with col_meta2:
-            # 🌍 NEW: REGION SELECTOR
             region = st.selectbox("Target Region format", [
                 "Kenya / UK (British English, A4, 'CV')", 
                 "USA / Canada (American English, Letter, 'Resume')",
@@ -328,7 +317,6 @@ def show_app():
                     try:
                         client = Groq(api_key=GROQ_KEY)
                         
-                        # 🧠 DYNAMIC PROMPT BASED ON REGION
                         prompt = f"""
                         Act as a professional career coach. Write a {doc_type} for the {industry} industry.
                         
@@ -357,7 +345,6 @@ def show_app():
                         # 🍪 UPDATE COOKIE & STATE
                         if not st.session_state.is_pro:
                             st.session_state.free_uses += 1
-                            # Set cookie to expire in 30 days
                             cookie_manager.set("careerflow_uses", st.session_state.free_uses, expires_at=datetime.datetime.now() + datetime.timedelta(days=30))
                             
                         st.rerun()
@@ -370,6 +357,7 @@ def show_app():
         st.subheader("🎉 Your Draft is Ready")
         final_text = st.text_area("Editor", st.session_state.generated_resume, height=500)
         
+        # Word Doc Generation
         doc = Document()
         style = doc.styles['Normal']
         font = style.font
@@ -393,4 +381,3 @@ if not st.session_state.generated_resume and st.session_state.free_uses == 0:
     show_landing_content()
 
 show_app()
-
