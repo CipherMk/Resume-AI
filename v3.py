@@ -11,13 +11,69 @@ import extra_streamlit_components as stx
 # --- ⚠️ CONFIGURATION ---
 st.set_page_config(page_title="CareerFlow | Global CV Architect Pro", page_icon="🌍", layout="wide")
 
+# =========================================================
+# 🔐 0. LOGIN GATE KEEPER (SECURE VERSION)
+# =========================================================
+
+# 👇 FETCH KEYS FROM SECRETS INSTEAD OF HARDCODING
+try:
+    VALID_ACCESS_KEYS = st.secrets["ACCESS_KEYS"]
+except:
+    # Fallback if secrets.toml is not configured yet
+    VALID_ACCESS_KEYS = ["admin-temp"] 
+
+# Initialize Authentication State
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+def show_login_screen():
+    st.markdown("""
+    <style>
+        .login-box {
+            max_width: 400px;
+            margin: 100px auto;
+            padding: 30px;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            background-color: white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown("## 🔐 Private Access")
+        st.markdown("Please enter your access key to continue.")
+        
+        password = st.text_input("Access Key", type="password", label_visibility="collapsed", placeholder="Enter Key Here")
+        
+        if st.button("Login", type="primary", use_container_width=True):
+            if password in VALID_ACCESS_KEYS:
+                st.session_state.authenticated = True
+                st.toast("✅ Access Granted")
+                time.sleep(0.5)
+                st.rerun()
+            else:
+                st.error("⛔ Invalid Key")
+
+# 🛑 IF NOT LOGGED IN, STOP HERE
+if not st.session_state.authenticated:
+    show_login_screen()
+    st.stop() # Prevents the rest of the app from loading
+
+# =========================================================
+# ... 🟢 MAIN APP STARTS BELOW THIS LINE ...
+# =========================================================
+
 # --- 🔐 SECRETS MANAGEMENT ---
 try:
     GROQ_KEY = st.secrets["GROQ_API_KEY"]
     INTASEND_SEC_KEY = st.secrets["INTASEND_SECRET_KEY"] 
     PAYMENT_LINK_URL = st.secrets["INTASEND_PAYMENT_LINK"]
 except:
-    # Fail gracefully if secrets aren't set
     GROQ_KEY = ""
     INTASEND_SEC_KEY = ""
     PAYMENT_LINK_URL = "#"
@@ -26,7 +82,6 @@ except:
 # 🍪 1. ROBUST COOKIE MANAGER (FIXED)
 # =========================================================
 def get_manager():
-    # FIX: Use Session State instead of Cache to avoid Widget Error
     if "cookie_manager_instance" not in st.session_state:
         st.session_state.cookie_manager_instance = stx.CookieManager()
     return st.session_state.cookie_manager_instance
@@ -34,7 +89,6 @@ def get_manager():
 cookie_manager = get_manager()
 
 # --- 🔄 SYNC LOGIC ---
-# This tiny pause ensures the JS bridge is established before we try to read.
 time.sleep(0.1)
 
 # =========================================================
@@ -42,10 +96,8 @@ time.sleep(0.1)
 # =========================================================
 COOKIE_NAME = "careerflow_usage_tracker_v1"
 MAX_FREE_USES = 2
-# 10 Years Expiration (Effective "Forever")
 FOREVER_DATE = datetime.datetime.now() + datetime.timedelta(days=365 * 10)
 
-# Initialize Session State
 if 'is_pro' not in st.session_state: st.session_state.is_pro = False
 if 'generated_resume' not in st.session_state: st.session_state.generated_resume = None
 if 'free_uses' not in st.session_state: st.session_state.free_uses = 0
@@ -56,11 +108,7 @@ if 'sample_us' not in st.session_state: st.session_state.sample_us = None
 cookie_val = cookie_manager.get(cookie=COOKIE_NAME)
 
 if cookie_val is not None:
-    # If cookie exists, force Session State to match it
     st.session_state.free_uses = int(cookie_val)
-else:
-    # If cookie is None (First visit), ensure we start at 0.
-    pass
 
 # =========================================================
 # 🎨 CSS STYLING
