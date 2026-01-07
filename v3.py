@@ -9,7 +9,7 @@ import io
 import extra_streamlit_components as stx 
 
 # --- ⚠️ CONFIGURATION ---
-st.set_page_config(page_title="CareerFlow | Global CV Architect", page_icon="🌍", layout="wide")
+st.set_page_config(page_title="CareerFlow | Global CV Architect Pro", page_icon="🌍", layout="wide")
 
 # --- 🔐 SECRETS MANAGEMENT ---
 try:
@@ -273,7 +273,7 @@ def show_app():
 
     # CHECK LIMITS
     if not st.session_state.is_pro and st.session_state.free_uses >= MAX_FREE_USES:
-        st.warning("🔒 Free Limit Reached")
+        st.warning("🔒 Limit Reached")
         col_pay1, col_pay2 = st.columns(2)
         with col_pay1:
             st.markdown("### 🚀 Get the Day Pass\n**Price:** KES 150\n\n* ✅ Unlimited Generations\n* ✅ All Region Formats")
@@ -381,3 +381,4 @@ if not st.session_state.generated_resume and st.session_state.free_uses == 0:
     show_landing_content()
 
 show_app()
+
