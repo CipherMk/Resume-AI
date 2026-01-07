@@ -8,6 +8,16 @@ from docx.shared import Pt
 import io
 import extra_streamlit_components as stx # pip install extra-streamlit-components
 
+# Initialize Session State
+if 'is_pro' not in st.session_state:
+    st.session_state.is_pro = False
+
+# ... other imports ...
+
+# Only run verification if they are NOT pro yet
+if not st.session_state.is_pro:
+    verify_payment()
+
 # --- ⚠️ CONFIGURATION ---
 st.set_page_config(page_title="CareerFlow | Global CV Architect", page_icon="🌍", layout="wide")
 
@@ -138,30 +148,63 @@ def generate_live_sample(region, job_title):
         return f"Could not generate sample: {e}"
 
 # =========================================================
-# 💰 LOGIC: PAYMENT & ACCESS
+# 💰 LOGIC: PAYMENT & ACCESS (DEBUG MODE)
 # =========================================================
 def verify_payment():
+    # 1. Get Query Parameters
     query_params = st.query_params
+    
+    # DEBUG: Print what we received (Delete this line after it works)
+    # st.write("Debug - Params Received:", query_params) 
+
+    # 2. Check for ID (IntaSend sends 'tracking_id' OR 'checkout_id')
     tracking_id = query_params.get("tracking_id", None)
+    if not tracking_id:
+        tracking_id = query_params.get("checkout_id", None) # sometimes it's this
     
     if tracking_id:
+        # Check for Admin Bypass
         if tracking_id == "TEST-ADMIN":
             st.session_state.is_pro = True
             st.toast("👨‍💻 Admin Test Access Granted")
+            # Clear params so we don't re-verify on refresh
+            st.query_params.clear() 
             return
 
+        # 3. Verify with IntaSend API
+        st.toast(f"Verifying Payment ID: {tracking_id}...")
+        
         url = "https://payment.intasend.com/api/v1/payment/status/"
-        headers = {"Authorization": f"Bearer {INTASEND_SEC_KEY}", "Content-Type": "application/json"}
+        headers = {
+            "Authorization": f"Bearer {INTASEND_SEC_KEY}", 
+            "Content-Type": "application/json"
+        }
+        
         try:
-            res = requests.post(url, json={"invoice_id": tracking_id}, headers=headers).json()
-            if res.get('invoice', {}).get('state') == 'COMPLETE':
+            res = requests.post(url, json={"invoice_id": tracking_id}, headers=headers)
+            
+            # DEBUG: See what IntaSend replied
+            # st.write("API Response:", res.json()) 
+            
+            response_data = res.json()
+            
+            # Check for specific "COMPLETE" state
+            if response_data.get('invoice', {}).get('state') == 'COMPLETE':
                 st.session_state.is_pro = True
-                st.toast("🎉 Payment Verified! Welcome to Pro.")
-        except:
-            st.error("Verification connection failed.")
+                st.toast("🎉 Payment Verified! Access Unlocked.")
+                
+                # IMPORTANT: Clear the URL so if they refresh, it doesn't try to pay again
+                st.query_params.clear()
+            
+            elif response_data.get('invoice', {}).get('state') == 'PENDING':
+                st.warning("Payment is still processing. Please wait a moment.")
+            
+            else:
+                st.error(f"Payment Failed or Cancelled. Status: {response_data.get('invoice', {}).get('state')}")
 
-if not st.session_state.is_pro:
-    verify_payment()
+        except Exception as e:
+            st.error(f"Connection Error: {e}")
+
 
 # =========================================================
 # 📝 CONTENT: SAMPLES & EDUCATION
@@ -350,3 +393,4 @@ if not st.session_state.generated_resume and st.session_state.free_uses == 0:
     show_landing_content()
 
 show_app()
+
