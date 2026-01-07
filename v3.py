@@ -25,10 +25,11 @@ except:
 # =========================================================
 # 🍪 1. ROBUST COOKIE MANAGER (FIXED)
 # =========================================================
-# REMOVED the 'experimental_allow_widgets' param to fix the crash
-@st.cache_resource
 def get_manager():
-    return stx.CookieManager()
+    # FIX: Use Session State instead of Cache to avoid Widget Error
+    if "cookie_manager_instance" not in st.session_state:
+        st.session_state.cookie_manager_instance = stx.CookieManager()
+    return st.session_state.cookie_manager_instance
 
 cookie_manager = get_manager()
 
@@ -59,7 +60,6 @@ if cookie_val is not None:
     st.session_state.free_uses = int(cookie_val)
 else:
     # If cookie is None (First visit), ensure we start at 0.
-    # We do NOT overwrite here to avoid resetting users if the cookie reader glitches.
     pass
 
 # =========================================================
