@@ -33,7 +33,7 @@ cookie_manager = get_manager()
 def inject_custom_css():
     st.markdown("""
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Merriweather:wght@300;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
         
         /* Global Reset */
         .block-container { padding-top: 2rem; padding-bottom: 2rem; }
@@ -66,24 +66,33 @@ def inject_custom_css():
         .icon-header { font-size: 2rem; margin-bottom: 15px; display: block; }
         .card-title { font-weight: 700; color: #1e293b; font-size: 1.1rem; margin-bottom: 8px; }
 
-        /* PAPER PREVIEW EFFECT */
+        /* PAPER DOCUMENT SIMULATION */
         .paper-preview {
             background-color: white;
-            border: 1px solid #cbd5e1;
-            padding: 40px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            font-family: 'Merriweather', serif;
-            color: #0f172a;
-            font-size: 0.95rem;
-            line-height: 1.7;
-            border-radius: 2px;
-            min-height: 400px;
+            border: 1px solid #e2e8f0;
+            padding: 50px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            font-family: 'Arial', 'Helvetica', sans-serif; /* Standard Resume Font */
+            color: #1e293b;
+            font-size: 14px;
+            line-height: 1.5;
+            border-radius: 4px;
+            min-height: 600px; /* Make it look like a full page */
             margin-top: 20px;
+            max-width: 850px; /* Approximate A4 width */
+            margin-left: auto;
+            margin-right: auto;
         }
-        .paper-header { border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-bottom: 20px; }
-        .paper-h1 { font-size: 1.8rem; font-weight: bold; text-transform: uppercase; margin:0; }
-        .paper-sub { color: #64748b; font-size: 0.9rem; font-family: 'Inter', sans-serif; }
         
+        /* Document Internals */
+        .doc-header-name { font-size: 24px; font-weight: 700; text-transform: uppercase; color: #0f172a; border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-bottom: 20px; }
+        .doc-section-title { font-size: 14px; font-weight: 700; text-transform: uppercase; color: #334155; border-bottom: 1px solid #cbd5e1; margin-top: 25px; margin-bottom: 10px; padding-bottom: 5px; }
+        .doc-job-title { font-weight: 700; font-size: 15px; color: #000; }
+        .doc-company { font-style: italic; color: #475569; }
+        .doc-date { float: right; font-weight: 600; font-size: 13px; }
+        .doc-list { padding-left: 20px; margin-top: 5px; }
+        .doc-list li { margin-bottom: 5px; font-size: 14px; color: #334155; }
+
         /* STATUS BADGES */
         .badge-free { background: #dbeafe; color: #1e40af; padding: 4px 12px; border-radius: 20px; font-weight: 600; font-size: 0.85rem; }
         .badge-pro { background: #dcfce7; color: #166534; padding: 4px 12px; border-radius: 20px; font-weight: 600; font-size: 0.85rem; border: 1px solid #166534; }
@@ -171,59 +180,122 @@ def show_landing_content():
         </div>
         """, unsafe_allow_html=True)
 
-    st.markdown("<br><hr><br>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
 
     # 3. LIVE SAMPLES
-    st.subheader("👁️ See What You Get")
-    st.markdown("We generate documents that match the job you want. Here is a **Kenya/UK Standard CV** vs a **US Standard Resume**.")
+    st.subheader("👁️ Compare Regional Formats")
+    st.markdown("See the difference between a **Kenya/UK CV** (Detailed, British English) and a **USA Resume** (Concise, Metric-Driven).")
     
-    tab_ke, tab_us = st.tabs(["🇰🇪 Kenyan/UK CV Sample", "🇺🇸 US Resume Sample"])
+    
+    
+    tab_ke, tab_us = st.tabs(["🇰🇪 Kenyan / UK CV (Detailed)", "🇺🇸 USA Resume (Concise)"])
     
     with tab_ke:
         st.markdown("""
         <div class="paper-preview">
-            <div class="paper-header">
-                <div class="paper-h1">SARAH W. KAMAU</div>
-                <div class="paper-sub">Nairobi, Kenya | sarah.kamau@email.com | +254 712 345 678</div>
+            <div class="doc-header-name">JOHNATHAN K. MAINA, CPA(K)</div>
+            <div style="text-align:center; font-size:13px; color:#444;">
+                P.O. Box 40321-00100, Nairobi, Kenya | +254 722 123 456 | j.maina@email.com<br>
+                LinkedIn: linkedin.com/in/jkmaina
             </div>
-            <p><strong>PROFESSIONAL PROFILE</strong><br>
-            Chartered Accountant (CPA-K) with 8 years of experience in financial auditing and tax compliance within the East African market. Proven ability to streamline payroll systems for 500+ employees. Seeking to leverage expertise in KRA compliance and SAP ERP at Equity Bank.</p>
+
+            <div class="doc-section-title">Career Profile</div>
+            <p>Strategic Finance Manager with over 10 years of experience in the East African banking sector. Expert in tax compliance (KRA iTax), financial risk assessment, and liquidity management. Successfully led a portfolio of KES 5 Billion in assets. Proven track record of reducing operational costs by implementing automated reconciliation systems (SAP ERP). Seeking to leverage expertise in regulatory compliance and team leadership at Equity Group Holdings.</p>
+
+            <div class="doc-section-title">Key Competencies</div>
+            <div style="display: flex; justify-content: space-between;">
+                <ul class="doc-list" style="margin-top:0;">
+                    <li>Financial Reporting (IFRS 9)</li>
+                    <li>Taxation & Audit Compliance</li>
+                    <li>Budgeting & Forecasting</li>
+                </ul>
+                <ul class="doc-list" style="margin-top:0;">
+                    <li>SAP ERP & Quickbooks</li>
+                    <li>Team Leadership & Mentoring</li>
+                    <li>Strategic Risk Management</li>
+                </ul>
+            </div>
+
+            <div class="doc-section-title">Professional Experience</div>
             
-            <p><strong>WORK EXPERIENCE</strong></p>
-            <p><strong>Nairobi Financial Solutions</strong> | <em>Senior Auditor</em> | Jan 2019 – Present</p>
-            <ul>
-                <li>Led external audits for 15 SME clients, ensuring 100% compliance with IFRS standards.</li>
-                <li>Implemented a new VAT filing system that reduced penalty risks by 95%.</li>
-                <li>Supervised a team of 4 junior accountants, organising weekly training on tax laws.</li>
+            <div>
+                <span class="doc-job-title">Senior Finance Manager</span>
+                <span class="doc-date">Jan 2019 – Present</span>
+                <div class="doc-company">Nairobi Commercial Bank | Nairobi, Kenya</div>
+                <ul class="doc-list">
+                    <li>Spearheaded the annual audit process for 15 branches, ensuring 100% compliance with Central Bank of Kenya (CBK) regulations.</li>
+                    <li>Designed and implemented a new cost-control framework that reduced branch operating expenses by 18% (KES 20M savings annually).</li>
+                    <li>Mentored a team of 12 junior accountants, organising quarterly workshops on IFRS updates which improved team productivity by 25%.</li>
+                    <li>Liaised with external auditors (KPMG) to facilitate smooth interim and final audits, resolving all queries within the statutory timeline.</li>
+                </ul>
+            </div>
+            
+            <div style="margin-top:15px;">
+                <span class="doc-job-title">Internal Auditor</span>
+                <span class="doc-date">Feb 2015 – Dec 2018</span>
+                <div class="doc-company">Regional Insurance Ltd | Mombasa, Kenya</div>
+                <ul class="doc-list">
+                    <li>Conducted risk-based audits across 5 regional offices, identifying control gaps in procurement that saved the company KES 5M.</li>
+                    <li>Prepared detailed audit reports for the Audit Committee, providing actionable recommendations on internal controls.</li>
+                </ul>
+            </div>
+
+            <div class="doc-section-title">Education & Certifications</div>
+            <ul class="doc-list">
+                <li><strong>Master of Business Administration (Finance)</strong> – Strathmore University (2018)</li>
+                <li><strong>Bachelor of Commerce (Finance)</strong> – University of Nairobi (2014) - First Class Honours</li>
+                <li><strong>Certified Public Accountant (CPA-K)</strong> – ICPAK Member No. 12345</li>
             </ul>
-            
-            <p><strong>EDUCATION</strong></p>
-            <p><strong>University of Nairobi</strong> | <em>Bachelor of Commerce (Finance)</em> | Second Class Honours (Upper Division)</p>
-            
-            <p><strong>REFEREES</strong></p>
-            <p><em>Available upon request.</em></p>
+
+            <div class="doc-section-title">Referees</div>
+            <p><strong>Dr. James Omondi</strong><br>Chief Financial Officer, Nairobi Commercial Bank<br>Email: j.omondi@ncb.co.ke | Phone: +254 711 000 000</p>
         </div>
         """, unsafe_allow_html=True)
         
     with tab_us:
         st.markdown("""
         <div class="paper-preview">
-            <div class="paper-header">
-                <div class="paper-h1">SARAH KAMAU</div>
-                <div class="paper-sub">New York, NY | sarah.kamau@email.com | (555) 123-4567</div>
+            <div class="doc-header-name">JOHN MAINA</div>
+            <div style="text-align:center; font-size:13px; color:#444;">
+                New York, NY | (555) 123-4567 | john.maina@email.com | linkedin.com/in/johnmaina
             </div>
-            <p><strong>SUMMARY</strong><br>
-            CPA-certified Financial Analyst specializing in GAAP compliance and risk assessment. Reduced audit turnaround time by 20% through automated reporting workflows.</p>
+
+            <div class="doc-section-title">Professional Summary</div>
+            <p>Results-oriented Financial Analyst with 7+ years of experience optimizing fiscal performance for Fortune 500 companies. Expert in GAAP compliance, financial modeling, and data visualization. Reduced audit cycle times by 30% through Python automation. Proficient in SAP, Tableau, and SQL.</p>
+
+            <div class="doc-section-title">Experience</div>
             
-            <p><strong>EXPERIENCE</strong></p>
-            <p><strong>Global Finance LLC</strong> | <em>Senior Analyst</em> | 2019 – Present</p>
-            <ul>
-                <li>Managed quarterly audit cycles for $50M portfolio, achieving zero non-compliance findings.</li>
-                <li>Optimized tax reporting processes using Python scripts, saving 10 labor hours weekly.</li>
-            </ul>
+            <div>
+                <span class="doc-job-title">Senior Financial Analyst</span>
+                <span class="doc-date">2019 – Present</span>
+                <div class="doc-company">Global Fintech Solutions | New York, NY</div>
+                <ul class="doc-list">
+                    <li>Managed a $50M quarterly budget, forecasting variances with 98% accuracy utilizing advanced Excel modeling.</li>
+                    <li>Developed an automated Python script to reconcile transaction data, saving the team 15 man-hours per week.</li>
+                    <li>Led cross-functional teams to streamline tax reporting processes, resulting in zero regulatory penalties over a 4-year period.</li>
+                    <li>Presented quarterly financial insights to the C-Suite, influencing key strategic decisions regarding expansion into Latin American markets.</li>
+                </ul>
+            </div>
             
-            <p><strong>SKILLS</strong></p>
-            <p>GAAP, SAP ERP, Python (Pandas), Financial Modeling, Regulatory Compliance.</p>
+            <div style="margin-top:15px;">
+                <span class="doc-job-title">Financial Analyst</span>
+                <span class="doc-date">2016 – 2019</span>
+                <div class="doc-company">Innovate Corp | San Francisco, CA</div>
+                <ul class="doc-list">
+                    <li>Analyzed revenue trends for SaaS products, identifying a 10% pricing opportunity that generated $1.2M in additional annual revenue.</li>
+                    <li>Collaborated with engineering teams to integrate Tableau dashboards, providing real-time P&L visibility to stakeholders.</li>
+                </ul>
+            </div>
+
+            <div class="doc-section-title">Technical Skills</div>
+            <p style="margin-top:5px;">
+            <strong>Analysis:</strong> Financial Modeling, Forecasting, GAAP, Variance Analysis<br>
+            <strong>Software:</strong> SAP ERP, Oracle NetSuite, Tableau, Power BI<br>
+            <strong>Programming:</strong> Python (Pandas), SQL, Advanced Excel (VBA)
+            </p>
+            
+            <div class="doc-section-title">Education</div>
+            <p style="margin-top:5px;"><strong>B.S. Finance</strong> | University of Pennsylvania (Wharton) | 2016</p>
         </div>
         """, unsafe_allow_html=True)
 
