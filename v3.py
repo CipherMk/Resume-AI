@@ -17,14 +17,16 @@ try:
     INTASEND_SEC_KEY = st.secrets["INTASEND_SECRET_KEY"] 
     PAYMENT_LINK_URL = st.secrets["INTASEND_PAYMENT_LINK"]
 except:
+    # Fail gracefully if secrets aren't set
     GROQ_KEY = ""
     INTASEND_SEC_KEY = ""
     PAYMENT_LINK_URL = "#"
 
 # =========================================================
-# 🍪 1. ROBUST COOKIE MANAGER (NO HICCUPS)
+# 🍪 1. ROBUST COOKIE MANAGER (FIXED)
 # =========================================================
-@st.cache_resource(experimental_allow_widgets=True)
+# REMOVED the 'experimental_allow_widgets' param to fix the crash
+@st.cache_resource
 def get_manager():
     return stx.CookieManager()
 
@@ -32,7 +34,6 @@ cookie_manager = get_manager()
 
 # --- 🔄 SYNC LOGIC ---
 # This tiny pause ensures the JS bridge is established before we try to read.
-# This prevents the "NoneType" error on first load.
 time.sleep(0.1)
 
 # =========================================================
@@ -40,7 +41,7 @@ time.sleep(0.1)
 # =========================================================
 COOKIE_NAME = "careerflow_usage_tracker_v1"
 MAX_FREE_USES = 2
-# 10 Years Expiration
+# 10 Years Expiration (Effective "Forever")
 FOREVER_DATE = datetime.datetime.now() + datetime.timedelta(days=365 * 10)
 
 # Initialize Session State
@@ -57,8 +58,8 @@ if cookie_val is not None:
     # If cookie exists, force Session State to match it
     st.session_state.free_uses = int(cookie_val)
 else:
-    # If cookie is None (First visit), ensure we start at 0
-    # We do not overwrite here to avoid race conditions, we just wait for the first save
+    # If cookie is None (First visit), ensure we start at 0.
+    # We do NOT overwrite here to avoid resetting users if the cookie reader glitches.
     pass
 
 # =========================================================
