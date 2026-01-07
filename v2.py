@@ -23,11 +23,17 @@ except:
     PAYMENT_LINK_URL = "#"
 
 # --- 🍪 COOKIE MANAGER (Persistence Engine) ---
-@st.cache_resource(experimental_allow_widgets=True)
+@st.cache_resource
 def get_manager():
     return stx.CookieManager()
 
 cookie_manager = get_manager()
+# --- 🍪 COOKIE MANAGER (Persistence Engine) ---
+#@st.cache_resource(experimental_allow_widgets=True)
+#def get_manager():
+#    return stx.CookieManager()
+#
+#cookie_manager = get_manager()
 
 # --- 🎨 PROFESSIONAL STYLING (CSS) ---
 def inject_custom_css():
@@ -293,3 +299,4 @@ if not st.session_state.generated_resume:
     show_hero()
 
 show_app()
+
